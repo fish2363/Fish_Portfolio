@@ -1,4 +1,5 @@
 using GondrLib.Dependencies;
+using System;
 using Unity.Cinemachine;
 using UnityEngine;
 
@@ -8,14 +9,10 @@ public class Player : Entity, IDependencyProvider, IKnockBackable
     [field: SerializeField] public PlayerInputSO PlayerInput { get; private set; }
     [SerializeField] private StateDataSO[] stateDataList;
 
-    [Header("Visual Models")]
-
-    public CameraTargetFollow curFollow; // 굴러다닐 머리 모델
-    public Transform _headPoint; // 굴러다닐 머리 모델
-    // 외부(State)에서 접근할 수 있도록 프로퍼티 열기
-
     private EntityStateMachine _stateMachine;
     private CharacterMovement _movement;
+
+    public event Action OnHeadDropEvent;
 
     [Provide] public Player ProvidePlayer() => this;
 
@@ -25,6 +22,14 @@ public class Player : Entity, IDependencyProvider, IKnockBackable
         _stateMachine = new EntityStateMachine(this, stateDataList);
         _movement = GetCompo<CharacterMovement>();
         OnDeathEvent.AddListener(HandleDeadEvent);
+        Bus<DropHeadEvent>.OnEvent += HandleDropHead;
+    }
+
+    private void HandleDropHead(DropHeadEvent evt)
+    {
+        if (this != evt.player) return;
+        OnHeadDropEvent?.Invoke();
+        ChangeState("HEAD_ROLL");
     }
 
     protected override void OnDestroy()
@@ -32,7 +37,6 @@ public class Player : Entity, IDependencyProvider, IKnockBackable
         base.OnDestroy();
         OnDeathEvent.RemoveListener(HandleDeadEvent);
     }
-
 
     private void HandleDeadEvent()
     {
@@ -57,7 +61,5 @@ public class Player : Entity, IDependencyProvider, IKnockBackable
 
 
     public void KnockBack(Vector3 direction, MovementDataSO knockbackMovement)
-    {
-        _movement.KnockBack(direction, knockbackMovement);
-    }
+        => _movement.KnockBack(direction, knockbackMovement);
 }
