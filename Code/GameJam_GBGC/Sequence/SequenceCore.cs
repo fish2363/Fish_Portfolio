@@ -1,8 +1,9 @@
+using Ami.BroAudio;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
-using Ami.BroAudio;
 
 public class SequenceCore : MonoBehaviour
 {
@@ -27,6 +28,7 @@ public class SequenceCore : MonoBehaviour
     private readonly List<SequenceActorBase> executedActors = new();
     private bool isClear = false;
 
+    #region Init
     private void Awake()
     {
         InitializeActors();
@@ -40,7 +42,6 @@ public class SequenceCore : MonoBehaviour
         ShowDefaultBalloons(true);
         ResetTaskUI();
     }
-
     private void OnEnable()
     {
         inGameEvent.AddListener<TaskCompleteEvent>(OnTaskCompleteReceived);
@@ -61,107 +62,22 @@ public class SequenceCore : MonoBehaviour
             actorLookup[actor.characterId] = actor;
         }
     }
-
-    // ========== 버튼 클릭 및 UI 제어 ==========
-
-    public void OnButtonClicked(CharacterBtn btn)
+    #endregion
+    #region Sequence (핵심)
+    private IEnumerator RewindAllRoutine(SequenceState ctx)
     {
-        bool isSelected = selectedButtons.Contains(btn);
+        inGameEvent?.RaiseEvent(new SequencePhaseEvent { CurrentPhase = Phase.Rewind });
 
-        if (selectedButtons.Count >= maxSelectCount && !isSelected)
+        for (int i = executedActors.Count - 1; i >= 0; i--)
         {
-            Debug.LogWarning("최대 선택 수 초과");
-            return;
+            var actor = executedActors[i];
+            if (actor == null) continue;
+
+            yield return StartCoroutine(actor.Rewind(ctx));
+            yield return new WaitForSeconds(1f);
         }
 
-        btn.Flip(isSelected);
-
-        if (isSelected)
-        {
-            selectedButtons.Remove(btn);
-            selectedOrder.Remove(btn.characterId);
-            btn.OnDeselected();
-        }
-        else
-        {
-            selectedButtons.Add(btn);
-            selectedOrder.Add(btn.characterId);
-            btn.OnSelected();
-
-            // 튜토리얼 연동
-            if (selectedButtons.Count == maxSelectCount && IsTutorial && TutorialBlock.Instance != null)
-            {
-                TutorialBlock.Instance.StartSecond();
-            }
-        }
-
-        for (int i = 0; i < selectedButtons.Count; i++)
-            selectedButtons[i].SetOrder(i + 1);
-    }
-
-    public void Confirm()
-    {
-        if (selectedOrder.Count != maxSelectCount)
-        {
-            Debug.LogWarning("선택 개수가 부족함");
-            return;
-        }
-
-        BroAudio.Play(click);
-        ShowDefaultBalloons(false);
-
-
-        var orderCopy = new List<ESequenceCharacter>(selectedOrder);
-        StartCoroutine(RunSequenceRoutine(orderCopy));
-    }
-
-    public void ResetSelection()
-    {
-        BroAudio.Play(click);
-
-        foreach (CharacterBtn btn in selectedButtons)
-        {
-            if (btn != null)
-            {
-                btn.outlinable.enabled = false;
-                btn.Flip(true);
-            }
-        }
-        ResetSelectionUI();
-    }
-
-    private void ResetSelectionUI()
-    {
-        ResetTaskUI();
-        foreach (var btn in selectedButtons)
-        {
-            if (btn != null) btn.OnDeselected();
-        }
-        selectedButtons.Clear();
-        selectedOrder.Clear();
-    }
-
-    private void OnTaskCompleteReceived(TaskCompleteEvent evt)
-    {
-        foreach (TaskText tt in taskTexts)
-        {
-            if (tt.task == evt.TaskType) tt.text.color = evt.TargetColor;
-        }
-    }
-
-    private void ResetTaskUI()
-    {
-        if (taskTexts == null) return;
-        foreach (TaskText tt in taskTexts) tt.text.color = Color.white;
-    }
-
-    private void ShowDefaultBalloons(bool show)
-    {
-        if (defaultBalloon == null) return;
-        foreach (var balloon in defaultBalloon)
-        {
-            if (balloon != null) balloon.gameObject.SetActive(show);
-        }
+        executedActors.Clear();
     }
 
     private IEnumerator RunSequenceRoutine(List<ESequenceCharacter> order)
@@ -202,14 +118,13 @@ public class SequenceCore : MonoBehaviour
             yield return new WaitForSeconds(1.5f);
         }
 
-        // 클리어 판정 시
         if (isClear)
         {
             inGameEvent?.RaiseEvent(new SequencePhaseEvent { CurrentPhase = Phase.Clear });
             yield break;
         }
 
-        Debug.Log("정방향 시퀀스 끝! (실패)");
+        Debug.Log("정방향 끝");
 
         if (!IsTutorial && TutorialBlock.Instance != null)
         {
@@ -237,23 +152,9 @@ public class SequenceCore : MonoBehaviour
         cinemaUIEvent.Initialize(false);
         inGameEvent?.RaiseEvent(cinemaUIEvent);
     }
+    #endregion
 
-    private IEnumerator RewindAllRoutine(SequenceState ctx)
-    {
-        inGameEvent?.RaiseEvent(new SequencePhaseEvent { CurrentPhase = Phase.Rewind });
-
-        for (int i = executedActors.Count - 1; i >= 0; i--)
-        {
-            var actor = executedActors[i];
-            if (actor == null) continue;
-
-            yield return StartCoroutine(actor.Rewind(ctx));
-            yield return new WaitForSeconds(1f);
-        }
-
-        executedActors.Clear();
-    }
-
+    #region Claer
     private void HandleClear()
     {
         Debug.Log("SequenceCore: 클리어 조건 달성!");
@@ -262,4 +163,5 @@ public class SequenceCore : MonoBehaviour
         inGameEvent?.RaiseEvent(new CinemaUIEvent().Initialize(false));
         isClear = true;
     }
+    #endregion
 }
