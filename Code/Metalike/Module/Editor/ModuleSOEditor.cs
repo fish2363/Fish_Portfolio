@@ -31,7 +31,6 @@ public class ModuleSOEditor : Editor
             }
             menu.ShowAsContext();
         }
-
         GUILayout.Space(10);
     }
 }

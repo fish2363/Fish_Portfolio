@@ -110,7 +110,7 @@ public class ProcBonusDamageModule : IModuleLogic
 
             DamageData damageData = _moduleController.DamageCompo.CalculateDamage(_def.damageStat, _def.attackData, 1f);
             damageable.ApplyDamage(damageData, _owner.transform.position, hitDir, _def.attackData, _owner);
-            if (enemy is Enemy noBoss) noBoss.EnemyStunned(_def.stunDuration);
+            //if (enemy is Enemy noBoss) noBoss.EnemyStunned(_def.stunDuration);
         }
     }
 }
