@@ -10,16 +10,8 @@ public class SequenceCore : MonoBehaviour
     [SerializeField] private List<SequenceActorBase> actors = new();
     [SerializeField] private List<Trofical> troficals = new();
 
-    [Header("Selection Setting")]
-    [SerializeField] private int maxSelectCount = 5;
-    [SerializeField] private SoundID click;
-
-    [Header("UI & Balloons")]
-    [SerializeField] private Dialogue[] defaultBalloon;
-    [SerializeField] private TaskText[] taskTexts;
     [SerializeField] private GameEventChannelSO inGameEvent;
 
-    // 상태 및 리스트
     public static bool IsTutorial;
     private readonly List<CharacterBtn> selectedButtons = new();
     private readonly List<ESequenceCharacter> selectedOrder = new();
@@ -37,18 +29,6 @@ public class SequenceCore : MonoBehaviour
     {
         ComeUpCardUIEvent comeUpCardUI = InGameEvent.GameStartEvent;
         inGameEvent?.RaiseEvent(comeUpCardUI);
-
-        ShowDefaultBalloons(true);
-        ResetTaskUI();
-    }
-    private void OnEnable()
-    {
-        inGameEvent.AddListener<TaskCompleteEvent>(OnTaskCompleteReceived);
-    }
-
-    private void OnDisable()
-    {
-        inGameEvent.RemoveListener<TaskCompleteEvent>(OnTaskCompleteReceived);
     }
 
     private void InitializeActors()
@@ -139,9 +119,6 @@ public class SequenceCore : MonoBehaviour
 
         ComeUpCardUIEvent comeUpCardUI = InGameEvent.GameStartEvent;
         inGameEvent?.RaiseEvent(comeUpCardUI);
-
-        ShowDefaultBalloons(true);
-        ResetSelectionUI();
 
         SequencePhaseEvent sequencePhase = InGameEvent.SequencePhaseEvent;
         sequencePhase.Initialize(Phase.End);
