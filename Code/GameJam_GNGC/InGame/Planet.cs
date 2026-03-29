@@ -3,126 +3,132 @@ using UnityEngine;
 
 public class Planet : MonoBehaviour
 {
-    [HideInInspector]
-    public EatSO currentSO;
-    [HideInInspector]
-    public float currentScale;
-    [HideInInspector]
-    public float currentLevel;
-    [HideInInspector]
-    public int score;
+    [HideInInspector] public EatSO currentSO;
+    [HideInInspector] public float currentScale;
+    [HideInInspector] public float currentLevel;
+    [HideInInspector] public int score;
 
     [Header("블랙홀 설정")]
-    public Transform blackholeCenter;     // 중심점 (블랙홀)
-    public float rotateSpeed = 180f;      // 도/초
-    public float shrinkSpeed = 0.5f;      // 축소 애니메이션 속도
-    public float magneticForceSizeSpeed = 0.1f;      //자력 축소 속도
-    public float magnetisRotateSpeed = 180f;      // 도/초
-    public float magnetismSpeed = 0.3f;      // 자력이 끌어당기는 속도
-    public float pullRate = 0.97f;        // 감기 속도 (0.95~0.99)
+    public float rotateSpeed = 180f;            // 도/초
+    public float shrinkSpeed = 0.5f;            // 축소 애니메이션 속도
+    public float magneticForceSizeSpeed = 0.1f; // 자력 축소 속도
+    public float magnetisRotateSpeed = 180f;    // 도/초
+    public float magnetismSpeed = 0.3f;         // 자력이 끌어당기는 속도
+    public float pullRate = 0.97f;              // 감기 속도 (0.95~0.99)
 
     [Header("파괴 조건")]
-    public float minScaleThreshold = 0.1f;   // 평균 스케일 기준
-    public float minRadiusThreshold = 0.05f; // 반지름 기준
-
-    private bool isAbsorbing = false;
-
-    private float currentRadius;
-    private float currentAngle;
+    public float minScaleThreshold = 0.1f;      // 평균 스케일 기준
+    public float minRadiusThreshold = 0.05f;    // 반지름 기준
 
     [Header("현재 지름")]
-    [SerializeField]
-    private float diameter;
+    [SerializeField] private float diameter;
 
     [Header("오디오")]
-    [SerializeField]
-    private SoundID eatSFX;
+    [SerializeField] private SoundID eatSFX;
 
-    CircleCollider2D col;
-    bool isTry;
-    bool isAte;
+    private bool _isAbsorbing = false;
+    private bool _isTry = false;
+    private bool _isAte = false;
+    private float _currentRadius;
+    private float _currentAngle;
 
-    void Start()
+    private CircleCollider2D _col;
+    private BlackHole _playerBlackHole;
+    private Spawner _gameSpawner;
+
+    private void Start()
     {
-        col = GetComponent<CircleCollider2D>();
-        blackholeCenter = FindAnyObjectByType<BlackHole>().gameObject.transform;
+        _col = GetComponent<CircleCollider2D>();
+
+        _playerBlackHole = FindAnyObjectByType<BlackHole>();
+        _gameSpawner = FindAnyObjectByType<Spawner>();
     }
 
     public void StartBlackhole()
     {
-        if (blackholeCenter == null) return;
+        if (_playerBlackHole == null) return;
 
-        isAbsorbing = true;
+        _isAbsorbing = true;
 
-        // 현재 위치에서 블랙홀 중심까지의 거리 및 각도 계산
-        Vector3 offset = transform.position - blackholeCenter.position;
-        currentRadius = offset.magnitude;
-        currentAngle = Mathf.Atan2(offset.y, offset.x);
+        Vector3 offset = transform.position - _playerBlackHole.transform.position;
+        _currentRadius = offset.magnitude;
+        _currentAngle = Mathf.Atan2(offset.y, offset.x);
     }
 
-    void Update()
+    private void Update()
     {
-        float radius = col.radius;
-        float scale = transform.lossyScale.x; // Circle이면 x와 y가 같다고 가정
-        diameter = radius * 2f * scale;
+        diameter = _col.radius * 2f * transform.lossyScale.x;
 
-        if(isTry)
+        if (_isTry && !_isAbsorbing)
         {
             transform.localScale = Vector3.Lerp(transform.localScale, Vector3.zero, shrinkSpeed * Time.deltaTime);
-            transform.position = Vector3.Lerp(transform.position, blackholeCenter.position, magnetismSpeed * Time.deltaTime);
+            transform.position = Vector3.Lerp(transform.position, _playerBlackHole.transform.position, magnetismSpeed * Time.deltaTime);
         }
-        if (isAbsorbing && blackholeCenter != null)
+
+        if (_isAbsorbing && _playerBlackHole != null)
         {
-            // 1. 회전 (라디안 단위로 누적)
-            float angleDelta = rotateSpeed * Mathf.Deg2Rad * Time.deltaTime;
-            currentAngle += angleDelta;
-            transform.Rotate(0, 0, magnetisRotateSpeed * Time.deltaTime);
-
-            // 2. 중심으로 감기 (점점 반지름 축소)
-            currentRadius *= Mathf.Pow(pullRate, Time.deltaTime * 60f); // 프레임 보정
-
-            // 3. 새로운 위치 계산
-            Vector3 offset = new Vector3(Mathf.Cos(currentAngle), Mathf.Sin(currentAngle), 0f) * currentRadius;
-            transform.position = blackholeCenter.position + offset;
-
-            // 4. 점점 작아지기
-            transform.localScale = Vector3.Lerp(transform.localScale, Vector3.zero, shrinkSpeed * Time.deltaTime);
-
-            // 5. 크기 기준 or 거리 기준으로 제거
-            float avgScale = (transform.localScale.x + transform.localScale.y + transform.localScale.z) / 3f;
-            if (avgScale < minScaleThreshold || currentRadius < minRadiusThreshold)
-            {
-                RosenBridge.Instance.EatPlanet(currentSO.planetType);
-                FindAnyObjectByType<Spawner>().planetList.Remove(gameObject);
-                BroAudio.Play(eatSFX);
-                Destroy(gameObject);
-            }
+            ProcessAbsorption();
         }
+    }
+
+    private void ProcessAbsorption()
+    {
+        float angleDelta = rotateSpeed * Mathf.Deg2Rad * Time.deltaTime;
+        _currentAngle += angleDelta;
+        transform.Rotate(0, 0, magnetisRotateSpeed * Time.deltaTime);
+
+        _currentRadius *= Mathf.Pow(pullRate, Time.deltaTime * 60f);
+
+        Vector3 offset = new Vector3(Mathf.Cos(_currentAngle), Mathf.Sin(_currentAngle), 0f) * _currentRadius;
+        transform.position = _playerBlackHole.transform.position + offset;
+
+        transform.localScale = Vector3.Lerp(transform.localScale, Vector3.zero, shrinkSpeed * Time.deltaTime);
+
+        float avgScale = (transform.localScale.x + transform.localScale.y + transform.localScale.z) / 3f;
+
+        if (avgScale < minScaleThreshold || _currentRadius < minRadiusThreshold)
+        {
+            ConsumePlanet();
+        }
+    }
+
+    private void ConsumePlanet()
+    {
+        RosenBridge.Instance.EatPlanet(currentSO.planetType);
+
+        if (_gameSpawner != null)
+        {
+            _gameSpawner.planetList.Remove(gameObject);
+        }
+
+        BroAudio.Play(eatSFX);
+        Destroy(gameObject);
     }
 
     private void OnTriggerStay2D(Collider2D collision)
     {
-        if (collision.CompareTag("Player"))
+        if (collision.CompareTag("Player") && _playerBlackHole != null)
         {
-            if (collision.GetComponent<BlackHole>().diameter >= diameter && !isAte)
+            if (_playerBlackHole.Diameter >= diameter && !_isAte)
             {
                 GameManager.Instance.Score(score);
                 StartBlackhole();
-                isAte = true;
+                _isAte = true;
+                _isTry = false;
             }
-            else
+            else if (!_isAte)
             {
-                isTry = true;
+                _isTry = true;
             }
         }
     }
 
     private void OnTriggerExit2D(Collider2D collision)
     {
-        if (collision.CompareTag("Player"))
+        if (collision.CompareTag("Player") && !_isAte)
         {
-            isTry = false;
-            transform.localScale = new Vector2(currentScale,currentScale);
+            _isTry = false;
+            transform.localScale = new Vector2(currentScale, currentScale);
         }
     }
 }
