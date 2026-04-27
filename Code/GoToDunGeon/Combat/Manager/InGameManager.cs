@@ -5,6 +5,8 @@ using UnityEngine;
 using Cysharp.Threading.Tasks;
 using System.Threading;
 using System.Linq;
+using Random = UnityEngine.Random;
+using DG.Tweening;
 
 public enum CombatState
 {
@@ -23,8 +25,12 @@ public class InGameManager : SingletonManager<InGameManager>
     [Header("Current State")]
     public CombatState currentState = CombatState.CombatStart;
 
+    [Header("Auto Battle")]
+    public bool isAutoPatternMode = false;  // 패턴만 자동
+    public bool isFullAutoMode = false;      // 완전 자동
+
     [Header("System References")]
-    public TurnStartText startText;
+    private TurnStartText startText;
     public PatternSystem patternSystem;
     public UIManager uiManager;
 
@@ -32,6 +38,7 @@ public class InGameManager : SingletonManager<InGameManager>
     public Action OnPlayerAttackTurnStart;
     public Action OnPatternInputStart;
     public Action OnEnemyAttackTurnStart;
+    
 
     // 상태 변경 이벤트
     public static event Action<CombatState> OnCombatStateChanged;
@@ -52,9 +59,14 @@ public class InGameManager : SingletonManager<InGameManager>
 
     [Header("Background")]
     [SerializeField] private InfiniteBackground2D _infiniteBackground2D;
-    
-    public List<Monster> selectedTarget;
+
+    [Header("Boss Round Effects")]
+    [SerializeField] private UnityEngine.UI.Image screenFlashImage; // 화면 번쩍임용 이미지 (풀스크린 UI)
+    [SerializeField] private Color bossFlashColor = new Color(1f, 0.2f, 0.2f, 0.6f); // 붉은색
+
+    public List<Monster> selectedTargets;
     private Monster[] _pendingTargets;
+    public Monster[] PendingTargets => _pendingTargets;
     [SerializeField] private GameObject monsterAttackEffectPrefab; //모든 몬스터 공격 이펙트릴 이걸로 퉁침 (나중에 달라진다면 각 몬스터별로 할당할 것)
 
 
@@ -65,6 +77,8 @@ public class InGameManager : SingletonManager<InGameManager>
         
         //게임 시작 시 데이터매니저가 없을 경우(CombatScene에서 시작했을 경우)를 대비해 Instance를 한 번 호출함.
         if (!DataManager.Instance) Debug.Log("데이터매니저 없음");
+
+
     }
 
     void Start()
@@ -103,6 +117,8 @@ public class InGameManager : SingletonManager<InGameManager>
         
         SpawnManager.Instance.SpawnPlayer();
         // fieldPlayer = SpawnManager.Instance.SpawnPlayerFromSessionData();
+        
+        StartCoroutine(uiManager.WaitForPlayerAndStartSetting());
 
         // RoundManager를 통해 라운드 시작
         if (RoundManager.Instance != null)
@@ -122,56 +138,169 @@ public class InGameManager : SingletonManager<InGameManager>
 
         await UniTask.Delay(1000); // 1초 대기
 
-        // 전투 시작 애니메이션 시퀀스
-        await PlayCombatStartAnimations();
-        
-        // 휴식라운드가 아닌 경우에만 턴 시작
-        bool isRestRound = false;
-        if (RoundManager.Instance != null)
+        // 아티팩트: 전투 시작 시 트리거
+        if (ArtifactManager.Instance != null)
         {
-            var currentRoundData = RoundManager.Instance.GetCurrentRoundData();
-            isRestRound = currentRoundData != null && currentRoundData.roundType == RoundDataSO.RoundType.Rest;
+            await ArtifactManager.Instance.TriggerBattleStartAsync();
         }
-        
-        if (!isRestRound)
-        {
-            StartPlayerAttackTurn();
-        }
+
+        // 첫 라운드는 PlayRoundTransitionAnimation()에서 모든 처리를 담당하므로
+        // InitializeCombat()에서는 추가 처리 불필요
     }
 
     #endregion
 
-    #region 전투 시작 애니메이션
-    
-    // 전투 시작 애니메이션 시퀀스
-    private async UniTask PlayCombatStartAnimations()
-    {
-        // RoundManager에서 이미 라운드가 시작되었으므로 라운드 타입 확인
-        bool isRestRound = false;
-        if (RoundManager.Instance != null)
-        {
-            var currentRoundData = RoundManager.Instance.GetCurrentRoundData();
-            isRestRound = currentRoundData != null && currentRoundData.roundType == RoundDataSO.RoundType.Rest;
-        }
-
-        // 전투라운드에서만 몬스터 스폰 (휴식라운드는 RoundManager에서 처리됨)
-        if (!isRestRound)
-        {
-            SpawnManager.Instance.SpawnMonsters();
-        }
-        
-        await MoveMap(isRestRound);
-    }
+    #region 맵 이동 애니메이션
 
     public async UniTask MoveMap(bool isRestRound)
     {
+        // 보스 라운드 체크
+        bool isBossRound = RoundManager.Instance.IsCurrentRoundBoss();
+
+        if (isBossRound && !isRestRound)
+        {
+            // 보스 라운드 특별 연출
+            await PlayBossRoundTransition();
+        }
+        else
+        {
+            // 일반 라운드 연출
+            SpawnManager.Instance.CurrentPlayer?.PlayWalkAnimation();
+            SetBackgroundScrolling(true, resetOffset:false);
+
+            await SpawnManager.Instance.MoveMapToTarget(isRestRound);
+
+            SetBackgroundScrolling(false);
+            SpawnManager.Instance.CurrentPlayer?.PlayIdleAnimation();
+        }
+    }
+
+    /// <summary>
+    /// 보스 라운드 특별 전환 연출
+    /// </summary>
+    private async UniTask PlayBossRoundTransition()
+    {
+        // 1. 플레이어 걷기 시작
         SpawnManager.Instance.CurrentPlayer?.PlayWalkAnimation();
-        SetBackgroundScrolling(true, resetOffset:false);
 
-        await SpawnManager.Instance.MoveMapToTarget(isRestRound);
+        // 2. 배경 느리게 시작 (일반 속도의 50%)
+        float normalSpeed = SpawnManager.Instance ? SpawnManager.Instance.MonsterMoveSpeed : 2f;
+        _infiniteBackground2D.SetWorldSpeed(normalSpeed * 0.5f);
+        _infiniteBackground2D.paused = false;
 
+        await UniTask.Delay(1000); // 1초 느리게 이동
+
+        // 3. 화면 번쩍임 효과
+        await PlayScreenFlash();
+
+        // 4. 카메라 흔들림
+        Camera mainCam = Camera.main;
+        Vector3 originalCamPos = Vector3.zero;
+
+        if (mainCam != null)
+        {
+            // 원래 카메라 위치 저장
+            originalCamPos = mainCam.transform.localPosition;
+
+            mainCam.transform.DOShakePosition(0.6f, strength: 0.6f, vibrato: 20, randomness: 90)
+                .SetEase(Ease.OutQuad);
+        }
+
+        // 5. 배경 급가속 (일반 속도의 150%)
+        _infiniteBackground2D.SetWorldSpeed(normalSpeed * 1.5f);
+
+        await UniTask.Delay(300); // 카메라 흔들림과 함께 진행
+
+        // 6. 몬스터 위치로 이동
+        await SpawnManager.Instance.MoveMapToTarget(false);
+
+        // 7. 정상 속도로 복귀 후 정지
         SetBackgroundScrolling(false);
         SpawnManager.Instance.CurrentPlayer?.PlayIdleAnimation();
+
+        // 8. 카메라 원위치 (원래 위치로 복귀)
+        if (mainCam != null)
+        {
+            mainCam.transform.DOLocalMove(originalCamPos, 0.3f).SetEase(Ease.OutQuad);
+        }
+    }
+
+    /// <summary>
+    /// 화면 번쩍임 효과 (보스 등장)
+    /// </summary>
+    private async UniTask PlayScreenFlash()
+    {
+        if (screenFlashImage == null) return;
+
+        screenFlashImage.gameObject.SetActive(true);
+        screenFlashImage.color = new Color(bossFlashColor.r, bossFlashColor.g, bossFlashColor.b, 0f);
+
+        // 페이드 인 (빠르게)
+        await screenFlashImage.DOFade(bossFlashColor.a, 0.1f).AsyncWaitForCompletion();
+
+        // 잠깐 유지
+        await UniTask.Delay(100);
+
+        // 페이드 아웃
+        await screenFlashImage.DOFade(0f, 0.3f).AsyncWaitForCompletion();
+
+        screenFlashImage.gameObject.SetActive(false);
+    }
+
+    /// 슬로우 모션 → 프리즈 프레임 → 강렬한 임팩트
+    private async UniTask PlayBossDefeatCinematic()
+    {
+        float originalTimeScale = Time.timeScale;
+        Camera mainCam = Camera.main;
+
+        // 1단계: 슬로우 모션 시작 (느리게 죽어가는 연출)
+        Time.timeScale = 0.2f;
+        await UniTask.Delay(500, ignoreTimeScale: true); // 실제 시간 0.5초 대기
+
+        // 2단계: 프리즈 프레임 (완전 정지 - 임팩트 순간)
+        Time.timeScale = 0f;
+        await UniTask.Delay(150, ignoreTimeScale: true); // 0.15초 프리즈
+
+        // 3단계: 강렬한 임팩트 효과 (시간 정지 상태에서 실행)
+        // 화이트 플래시 (밝은 섬광)
+        if (screenFlashImage != null)
+        {
+            screenFlashImage.gameObject.SetActive(true);
+            Color whiteFlash = new Color(1f, 1f, 1f, 0.8f); // 화이트 플래시
+            screenFlashImage.color = whiteFlash;
+
+            // unscaled time으로 페이드 아웃 (시간 정지 영향 안받음)
+            screenFlashImage.DOFade(0f, 0.4f)
+                .SetUpdate(true) // Time.timeScale 무시
+                .SetEase(Ease.OutQuad);
+        }
+
+        // 강한 카메라 쉐이크 (시간 정지 영향 안받음)
+        if (mainCam != null)
+        {
+            Vector3 originalCamPos = mainCam.transform.localPosition;
+
+            mainCam.transform.DOShakePosition(0.6f, strength: 0.8f, vibrato: 30, randomness: 90)
+                .SetUpdate(true) // Time.timeScale 무시
+                .SetEase(Ease.OutQuad)
+                .OnComplete(() => {
+                    // 카메라 위치 복원
+                    mainCam.transform.DOLocalMove(originalCamPos, 0.2f).SetUpdate(true);
+                });
+        }
+
+        // 4단계: 시간 정상화
+        await UniTask.Delay(100, ignoreTimeScale: true);
+        Time.timeScale = originalTimeScale;
+
+        // 5단계: 여운 (약간 대기)
+        await UniTask.Delay(300, ignoreTimeScale: true);
+
+        // 플래시 이미지 비활성화
+        if (screenFlashImage != null)
+        {
+            screenFlashImage.gameObject.SetActive(false);
+        }
     }
     
     private void SetBackgroundScrolling(bool isScrolling, bool resetOffset = true)
@@ -191,27 +320,59 @@ public class InGameManager : SingletonManager<InGameManager>
         // Debug.Log($"배경 스크롤 상태: {(isScrolling ? "활성화" : "비활성화")}");
     }
 
+    // private async UniTask PlayCombatStartAnimations()
+    // {
+    //     Debug.Log("전투 시작 애니메이션 실행");
+    //     
+    //     var sessionData = DataManager.Instance.LoadGameSession();
+    //     if (sessionData == null)
+    //     {
+    //         Debug.LogError("세션 데이터가 없습니다.");
+    //         return;
+    //     }
+    //
+    //     RoundDataSO roundData = RoundManager.Instance.GetRoundData(sessionData.currentStageNumber, sessionData.currentRoundNumber);
+    //     if (!roundData)
+    //     {
+    //         Debug.LogError("RoundData를 찾을 수 없습니다.");
+    //         return;
+    //     }
+    //
+    //     // 첫 라운드 몬스터 스폰
+    //     List<Monster> spawned = SpawnManager.Instance.SpawnMonstersForRound(roundData, autoMove: false);
+    //     fieldEnemies = spawned;
+    //     
+    //     SetPlayersRun(true);
+    //     SetBackgroundScrolling(true, resetOffset:false);
+    //
+    //     await SpawnManager.Instance.MoveMonstersToTargetsAsync(spawned);
+    //     
+    //     SetBackgroundScrolling(false);
+    //     SpawnManager.Instance.CurrentPlayer?.PlayIdleAnimation();
+    // }
+
     /// <summary>
     /// 외부에서 라운드 전환 애니메이션 실행 (매 라운드마다 호출용)
     /// </summary>
     public async void PlayRoundTransitionAnimation()
     {
-        Debug.Log("라운드 전환 애니메이션 시작");
+        // Debug.Log("라운드 전환 애니메이션 시작");
         
         // 현재 라운드가 휴식 라운드인지 확인
         bool isRestRound = RoundManager.Instance.GetCurrentRoundData()?.roundType == RoundDataSO.RoundType.Rest;
-        Debug.Log($"[InGameManager] 현재 라운드 타입 확인: {(isRestRound ? "휴식" : "전투")}");
         
         SpawnManager.Instance.ClearAllMonsters();
         await UniTask.Delay(200); // 잠시 대기
-        
-        // 휴식 라운드가 아닐 때만 몬스터 스폰
-        if (!isRestRound)
+
+        if (isRestRound)
         {
+            // 휴식 라운드: 캠프파이어 스폰 (실패해도 계속 진행)
+            var spawnedCampfire = SpawnManager.Instance.SpawnCampfire();
+        }
+        else
+        {
+            // 일반 라운드: 몬스터 스폰
             var spawnedMonsters = SpawnManager.Instance.SpawnMonsters();
-            Debug.Log($"[InGameManager] 몬스터 스폰 결과: {spawnedMonsters?.Count ?? 0}마리");
-            
-            // 몬스터 스폰 실패 시 에러 로그
             if (spawnedMonsters == null || spawnedMonsters.Count == 0)
             {
                 Debug.LogError("[InGameManager] 몬스터 스폰 실패! MoveMap 실행하지 않음");
@@ -225,15 +386,36 @@ public class InGameManager : SingletonManager<InGameManager>
         // 일반 라운드면 플레이어 턴 시작
         if (!isRestRound)
         {
-            Debug.Log("[InGameManager] 일반 라운드 전환 완료 - 플레이어 턴 시작");
+            // Debug.Log("[InGameManager] 일반 라운드 전환 완료 - 플레이어 턴 시작");
             StartPlayerAttackTurn();
         }
         else
         {
-            Debug.Log("[InGameManager] 휴식 라운드 전환 완료");
+            // 휴식라운드 이동 완료 후 캠프파이어 불꽃 켜기
+            StartRestRoundCampfire().Forget();
+            // 휴식라운드 UI 시퀀스 시작
+            RoundManager.Instance.StartRestRoundSequence();
         }
         
-        Debug.Log("라운드 전환 애니메이션 완료");
+        // Debug.Log("라운드 전환 애니메이션 완료");
+    }
+
+    // 휴식라운드 캠프파이어 시작
+    private async UniTask StartRestRoundCampfire()
+    {
+        if (SpawnManager.Instance.CurrentCampfire != null)
+        {
+            CampfireController campfireController = SpawnManager.Instance.CurrentCampfire.GetComponent<CampfireController>();
+            if (campfireController != null)
+            {
+                // 부드럽게 불꽃 켜기
+                await campfireController.TurnOnFireAsync(1.5f);
+            }
+            else
+            {
+                Debug.LogWarning("[InGameManager] CampfireController 컴포넌트를 찾을 수 없습니다!");
+            }
+        }
     }
 
     #endregion
@@ -285,39 +467,134 @@ public class InGameManager : SingletonManager<InGameManager>
     public async void StartPlayerAttackTurn()
     {
         CurrentTurnCnt++;
+
+        // 플레이어 턴 시작 시 마나/체력 회복 (재능 보너스 포함)
+        Player player = SpawnManager.Instance?.CurrentPlayer;
+        if (player != null)
+        {
+            player.RecoverManaPerTurn();
+            player.RecoverHealthPerTurn();
+        }
+
+        // 아티팩트: 턴 시작 시 트리거
+        if (ArtifactManager.Instance != null)
+        {
+            await ArtifactManager.Instance.TriggerTurnStartAsync();
+        }
+
         if (startText != null) await startText.StartTurnUI(StartTextType.MYTURN,CurrentTurnCnt);
         ChangeState(CombatState.PlayerAttackTurn);
         OnPlayerAttackTurnStart?.Invoke();
-        // Debug.Log("플레이어 공격턴 시작");
+
+        // 완전 자동 모드 체크
+        if (isFullAutoMode)
+        {
+            // 짧은 딜레이
+            await UniTask.Delay(500);
+
+            // 최적 스크롤 자동 선택
+            ScrollSO selectedScroll = AutoSelectBestScroll();
+
+            if (selectedScroll != null)
+            {
+                // 타겟 자동 선택 (첫 번째 살아있는 적)
+                var aliveEnemies = SpawnManager.Instance.CurrentMonsters.Where(m => m.IsAlive()).ToArray();
+                if (aliveEnemies.Length > 0)
+                {
+                    selectedTargets = new List<Monster> { aliveEnemies[0] };
+                }
+
+                // 스크롤 선택 실행
+                OnScrollSelected(selectedScroll);
+            }
+            return;
+        }
+
+        // 패턴 자동 모드 또는 수동 모드: 플레이어 입력 대기
+        // (기존 로직은 OnScrollSelected에서 처리)
     }
+
+    //public void OnScrollSelected(ScrollSO selectedScroll) // 스크롤 선택 시 패턴 시스템으로 전달
+    //{
+    //    if (currentState != CombatState.PlayerAttackTurn) return;
+
+    //    // 패턴 입력 시작
+    //    OnPatternInputStart?.Invoke();
+    //    ChangeState(CombatState.PatternInput);
+    //    _pendingTargets = selectedTarget.ToArray();
+    //    patternSystem.StartAttackPattern(selectedScroll);
+    //    Debug.Log($"스크롤 선택: {selectedScroll.scrollName}");
+    //}
 
     public void OnScrollSelected(ScrollSO selectedScroll) // 스크롤 선택 시 패턴 시스템으로 전달
     {
         if (currentState != CombatState.PlayerAttackTurn) return;
 
+        // 플레이어 턴 시작 시 상태이상 처리
+        Player player = SpawnManager.Instance.CurrentPlayer;
+        if (player != null)
+        {
+            player.OnTurnStart();
+            if (!player.CanAct())
+            {
+                Debug.Log($"{player.name}이(가) 상태이상으로 행동 불가!");
+                StartEnemyTurn();
+                return;
+            }
+        }
+
+        // 마나 확인 및 소비
+        if (player != null)
+        {
+            Debug.Log($"[마나 소비 전] {player.name}: {player.GetCurrentMana()}/{player.GetMaxMana()}");
+            if (!player.ConsumeMana(selectedScroll.scrollManaCost))
+            {
+                Debug.Log($"마나가 부족합니다. 필요: {selectedScroll.scrollManaCost}, 현재: {player.GetCurrentMana()}");
+                return;
+            }
+            Debug.Log($"[마나 소비 후] {player.name}: {player.GetCurrentMana()}/{player.GetMaxMana()}");
+        }
+        else
+        {
+            Debug.LogError("CurrentPlayer가 null입니다!");
+            return;
+        }
+
+        uiManager.ShowSpellGrid();
         // 패턴 입력 시작
         OnPatternInputStart?.Invoke();
         ChangeState(CombatState.PatternInput);
-        _pendingTargets = selectedTarget.ToArray();
+        _pendingTargets = selectedTargets.ToArray();
         patternSystem.StartAttackPattern(selectedScroll);
-        Debug.Log($"스크롤 선택: {selectedScroll.scrollName}");
+        Debug.Log($"스크롤 선택: {selectedScroll.scrollName}, 마나 소비: {selectedScroll.scrollManaCost}");
     }
 
-    public void OnAttackPatternComplete(ScrollSO scroll, float accuracy, int damage) // 공격 패턴 완료 시 데미지 처리
+    public void OnAttackPatternComplete(ScrollSO scroll, PatternResult patternResult) // 공격 패턴 완료 시 데미지 처리
     {
         if (currentState != CombatState.PatternInput) return;
 
+        // 패턴 완료 시 그리드 OFF
+        uiManager.HideSpellGrid();
+
+        // CombatSystem에서 모든 타겟 데미지 계산
+        Player player = SpawnManager.Instance.CurrentPlayer;
+        float damage = CombatSystem.CalculateFinalDamage(scroll, player, patternResult);
+
         // 플레이어 공격 처리 시작
-        ProcessPlayerAttackAsync(scroll, accuracy, damage).Forget();
+        ProcessPlayerAttackAsync(scroll, damage).Forget();
     }
 
-    private async UniTask ProcessPlayerAttack(ScrollSO scroll, float accuracy, int damage) // 플레이어 공격 데미지 계산 및 적용
+    private async UniTask ProcessPlayerAttack(ScrollSO scroll, float damage) // 플레이어 공격 데미지 적용
     {
         ChangeState(CombatState.Processing);
-        Debug.Log($"플레이어 공격 처리 시작 - 정확도: {accuracy}, 데미지: {damage}");
+        // Debug.Log($"플레이어 공격 처리 시작 - 타겟 수: {damage.Count}");
 
-        // await PlayPlayerAttackAnimationSequence();
-        
+        // 아티팩트: 카드 사용 시 트리거
+        if (ArtifactManager.Instance != null)
+        {
+            await ArtifactManager.Instance.TriggerCardUsedAsync(scroll);
+        }
+
         await RunScrollAsync(scroll, damage);
 
         // await UniTask.Delay((int)(processingTime * 1000));
@@ -335,6 +612,13 @@ public class InGameManager : SingletonManager<InGameManager>
 
         if (allMonstersDead)
         {
+            // 보스 라운드 체크 - 보스 처치 시 특별 연출
+            bool isBossRound = RoundManager.Instance.IsCurrentRoundBoss();
+            if (isBossRound)
+            {
+                await PlayBossDefeatCinematic(); // 보스 처치 피니시 연출
+            }
+
             EndCombat(true); // 승리
         }
         else
@@ -343,12 +627,12 @@ public class InGameManager : SingletonManager<InGameManager>
         }
     }
 
-    private async UniTaskVoid ProcessPlayerAttackAsync(ScrollSO scroll, float accuracy, int damage)
+    private async UniTaskVoid ProcessPlayerAttackAsync(ScrollSO scroll, float damage)
     {
-        await ProcessPlayerAttack(scroll, accuracy, damage);
+        await ProcessPlayerAttack(scroll, damage);
     }
     
-    private async UniTask RunScrollAsync(ScrollSO scroll, int damage)
+    private async UniTask RunScrollAsync(ScrollSO scroll, float damage)
     {
         if (!scroll) throw new InvalidOperationException("[RunScroll] scroll이 null입니다.");
         if (!scroll.logicData)
@@ -356,69 +640,13 @@ public class InGameManager : SingletonManager<InGameManager>
             Debug.LogWarning($"[RunScroll] scroll({scroll.name})에 Logic이 비어있습니다.");
             return;
         }
-        
-        Debug.Log($"[RunScrollAsync] {scroll.name} 발동. LogicData: {scroll.logicData.name}");
-
-        Monster[] targets = _pendingTargets;
 
         CancellationToken token = this.GetCancellationTokenOnDestroy();
-        // ScrollContext ctx = new ScrollContext
-        // {
-        //     Caster = SpawnManager.Instance.GetCurrentPlayer(),
-        //     Targets = targets,
-        //     Token = token,
-        //     Value = damage,
-        //     Count = scroll.hitCount,
-        // };
-        ScrollContext ctx =
-            new ScrollContext(scroll.scrollName, SpawnManager.Instance.CurrentPlayer, targets, token, damage, scroll.hitCount);
-        Debug.Log($"[test] SpawnManager.Instance.CurrentPlayer: {SpawnManager.Instance.CurrentPlayer}");
 
+        // 단일 타겟: 선택된 대상 1개만 넣어서 실행
+        ScrollContext ctx = new ScrollContext(scroll, SpawnManager.Instance.CurrentPlayer, selectedTargets.ToArray() as Entity[], token, damage);
         await scroll.logicData.ExecuteAsync(ctx);
     }
-    
-    
-    // 공격은 SpawnManager.Instance.GetCurrentPlayer().PlayAttackAnimation() 쓰시고
-    // 피격은 SpawnManager.Instance.GetCurrentMonsters()[n].PlayDamagedAnimation(); 쓰세요, -발렌
-    // /// <summary>
-    // /// 플레이어 공격 애니메이션 시퀀스
-    // /// </summary>
-    // private async UniTask PlayPlayerAttackAnimationSequence()
-    // {
-    //     Debug.Log("플레이어 공격 애니메이션 시퀀스 시작");
-    //
-    //     // 1. 플레이어 공격 애니메이션
-    //     GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
-    //     foreach (GameObject playerObj in players)
-    //     {
-    //         AnimationManager animMgr = playerObj.GetComponent<AnimationManager>();
-    //         if (animMgr != null)
-    //         {
-    //             animMgr.PlayAttack();
-    //             Debug.Log($"⚔️ {playerObj.name} 공격 애니메이션 재생");
-    //         }
-    //     }
-    //
-    //     await UniTask.Delay(1500); // 공격 애니메이션 시간
-    //
-    //     // 2. 몬스터 피격 애니메이션
-    //     GameObject[] monsters = GameObject.FindGameObjectsWithTag("Monster");
-    //     foreach (GameObject monsterObj in monsters)
-    //     {
-    //         Monster monster = monsterObj.GetComponent<Monster>();
-    //         if (monster != null && monster.IsAlive())
-    //         {
-    //             AnimationManager monsterAnimMgr = monsterObj.GetComponent<AnimationManager>();
-    //             if (monsterAnimMgr != null)
-    //             {
-    //                 monsterAnimMgr.PlayDamaged();
-    //                 Debug.Log($"{monsterObj.name} 피격 애니메이션 재생");
-    //             }
-    //         }
-    //     }
-    //
-    //     await UniTask.Delay(1000); // 피격 애니메이션 시간
-    // }
 
     #endregion
 
@@ -428,9 +656,16 @@ public class InGameManager : SingletonManager<InGameManager>
     {
         ChangeState(CombatState.EnemyAttackTurn);
         OnEnemyAttackTurnStart?.Invoke();
+
+        // 아티팩트: 플레이어 턴 끝 트리거
+        if (ArtifactManager.Instance != null)
+        {
+            await ArtifactManager.Instance.TriggerTurnEndAsync();
+        }
+
         // Debug.Log("적 공격턴 시작");
         if (startText != null) await startText.StartTurnUI(StartTextType.ENEMYTURN, CurrentTurnCnt);
-        selectedTarget.Clear();
+        selectedTargets.Clear();
         // 몬스터들 순서대로 공격 처리 (기존 단일 공격에서 변경)
         ProcessMonstersAttackSequentiallyAsync().Forget();
     }
@@ -496,42 +731,123 @@ public class InGameManager : SingletonManager<InGameManager>
     
     private async UniTask ProcessSingleMonsterAttack(Monster attackingMonster)
     {
-        // Debug.Log($" {attackingMonster.name} 공격 시작");
-
-        // 1. 몬스터 공격 애니메이션
-        attackingMonster.PlayAttackAnimation();
-
-        await UniTask.Delay(500); // 공격 애니메이션 시간
-
-        // 2. 데미지 계산
-        int monsterDamage = attackingMonster.GetAttackDamage();
-        // Debug.Log($"{attackingMonster.name}의 공격력: {monsterDamage}");
-
-        Player player = SpawnManager.Instance.CurrentPlayer;
-
-        Debug.Log("공격");
-        EffectController.Instance.Create(
-            monsterAttackEffectPrefab, player.transform.position + ScrollContext.OffsetCenter, 
-            0, 10f, 1f, 100, false);
-
-        // 3. 플레이어들에게 데미지 적용
-        if (player != null && player.IsAlive())
+        // 몬스터가 이미 파괴되었는지 체크
+        if (attackingMonster == null || !attackingMonster)
         {
-            // 플레이어 피격 애니메이션
-            player.PlayDamagedAnimation();
-
-            // 데미지 적용
-            player.TakeDamage(player.CalculateDamage(monsterDamage));
-            // Debug.Log($"{playerObj.name}이 {monsterDamage} 데미지를 받았습니다.");
-
-            // 플레이어가 죽었는지 확인하고 사망 애니메이션 재생
-            if (!player.IsAlive())
-            {
-                player.PlayDeathAnimation();
-            }
+            Debug.LogWarning("몬스터가 이미 파괴되어 공격을 건너뜁니다.");
+            return;
         }
 
-        await UniTask.Delay(1000); // 피격 애니메이션 시간
+        // Debug.Log($" {attackingMonster.name} 공격 시작");
+
+        // 몬스터 턴 시작 시 상태이상 처리
+        attackingMonster.OnTurnStart();
+        if (!attackingMonster.CanAct())
+        {
+            Debug.Log($"{attackingMonster.name}이(가) 상태이상으로 행동 불가!");
+            await UniTask.Delay(1000); // 1초 대기
+            return; // 이 몬스터는 턴 스킵
+        }
+
+        if (attackingMonster.IsBoss())
+        {
+            Debug.Log($"보스 몬스터 {attackingMonster.name}의 공격");
+            CancellationToken token = this.GetCancellationTokenOnDestroy();
+            Player player = SpawnManager.Instance.CurrentPlayer;
+
+            // BossMonster로 캐스팅해서 보스 스크롤 가져오기
+            BossMonster boss = attackingMonster as BossMonster;
+            ScrollSO[] bossScrolls = boss.GetBossScrolls();
+
+            if (bossScrolls == null || bossScrolls.Length == 0)
+            {
+                Debug.LogWarning($"보스 {boss.name}에게 스크롤이 없습니다! 일반 공격으로 전환합니다.");
+                // 일반 몬스터 공격으로 폴백
+                attackingMonster.PlayAttackAnimation();
+                await UniTask.Delay(500);
+
+                int finalDamage = CombatSystem.CalculateMonsterAttackDamage(attackingMonster, player);
+
+                float deg = Random.Range(-10, 10);
+                EffectController.Instance.Create(
+                    monsterAttackEffectPrefab, player.transform.position + new Vector3(0.15f, 0.15f, 0f),
+                    deg, 2f, 2f, 100, false);
+
+                if (player != null && player.IsAlive())
+                {
+                    player.PlayDamagedAnimation();
+                    player.TakeDamage(finalDamage);
+
+                    if (!player.IsAlive())
+                    {
+                        player.PlayDeathAnimation();
+                    }
+                }
+
+                await UniTask.Delay(1000);
+                return;
+            }
+
+            ScrollSO selectedScroll = bossScrolls[Random.Range(0, bossScrolls.Length)];
+            Debug.Log($"보스가 스크롤 사용: {selectedScroll.scrollName}");
+
+            // CombatSystem을 통한 보스 데미지 계산
+            PatternResult patternResult = new PatternResult
+            {
+                accuracy = 1.0f,
+                isPerfect = false,
+                completionTime = 0f,
+                totalTime = 1f
+            };
+            float damage = CombatSystem.CalculateFinalDamage(selectedScroll, player, patternResult);
+
+            ScrollContext ctx = new ScrollContext(
+                selectedScroll,
+                attackingMonster,
+                new Entity[] { player },
+                token,
+                damage);
+
+            await selectedScroll.logicData.ExecuteAsync(ctx);
+
+            // 몬스터 스크롤 실행 완료 후 플레이어에게 상태이상 적용
+            if (StatusEffectSystem.Instance != null && selectedScroll.statusEffect != StatusEffectSystem.StatusEffectType.None)
+            {
+                StatusEffectSystem.Instance.ApplyScrollStatusEffect(selectedScroll, player.gameObject);
+            }
+        }
+        else
+        {
+            // 1. 몬스터 공격 애니메이션
+            attackingMonster.PlayAttackAnimation();
+
+            await UniTask.Delay(500); // 공격 애니메이션 시간
+
+            // 2. CombatSystem을 통한 데미지 계산
+            Player player = SpawnManager.Instance.CurrentPlayer;
+            int finalDamage = CombatSystem.CalculateMonsterAttackDamage(attackingMonster, player);
+
+            // 이펙트 생성
+            float deg = Random.Range(-10, 10);
+            EffectController.Instance.Create(
+                monsterAttackEffectPrefab, player.transform.position + new Vector3(0.15f, 0.15f, 0f), 
+                deg, 2f, 2f, 100, false);
+
+            // 3. 플레이어에게 데미지 적용
+            if (player != null && player.IsAlive())
+            {
+                player.PlayDamagedAnimation();
+                player.TakeDamage(finalDamage);
+
+                // 플레이어가 죽었는지 확인하고 사망 애니메이션 재생
+                if (!player.IsAlive())
+                {
+                    player.PlayDeathAnimation();
+                }
+            }
+
+            await UniTask.Delay(1000); // 피격 애니메이션 시간
+        }
         // Debug.Log($"{attackingMonster.name} 공격 완료");
     }
     #endregion
@@ -546,6 +862,7 @@ public class InGameManager : SingletonManager<InGameManager>
         {
             Debug.Log("🎉 전투 승리!");
             if (startText != null) await startText.StartTurnUI(StartTextType.ROUNDEND, CurrentTurnCnt);
+            CurrentTurnCnt = 0;
             OnCombatVictory?.Invoke();
         }
         else
@@ -674,6 +991,35 @@ public class InGameManager : SingletonManager<InGameManager>
         {
             TriggerMonsterAttackAnimation();
         }
+    }
+
+    #endregion
+
+    #region 자동 전투
+
+    private ScrollSO AutoSelectBestScroll()
+    {
+        var player = SpawnManager.Instance.CurrentPlayer;
+        if (player == null) return null;
+
+        // 사용 가능한 스크롤 목록
+        var availableScrolls = uiManager.playerScrolls;
+
+        // 마나가 충분하고 사용 가능한 스크롤만 필터링
+        var usableScrolls = availableScrolls
+            .Where(s => s.scrollManaCost <= player.GetCurrentMana())
+            .Where(s => s.scrollCurrentUsageCount < s.scrollMaxUsageCount)
+            .ToList();
+
+        if (usableScrolls.Count == 0) return null;
+
+        // 데미지 효율이 가장 높은 스크롤 선택 (데미지 / 마나)
+        return usableScrolls
+            .OrderByDescending(s => {
+                float damage = s.baseDamage + (s.attackCoefficient * player.GetModifiedAttack());
+                return damage / Mathf.Max(1, s.scrollManaCost);
+            })
+            .First();
     }
 
     #endregion

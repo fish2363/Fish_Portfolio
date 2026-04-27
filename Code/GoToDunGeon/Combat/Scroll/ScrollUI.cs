@@ -26,11 +26,11 @@ public class ScrollUI : MonoBehaviour
     [Header("===== 메인 이미지 =====")]
     [SerializeField] private Image mainImage;                // ImagePanel/Image (미정)
 
-    //[Header("Buttons")]
-    //[SerializeField] private Button cancelButton;
-    //[SerializeField] private TextMeshProUGUI cancelText;
-    //[SerializeField] private Button selectButton;
-    //[SerializeField] private TextMeshProUGUI changingText;
+    [Header("Buttons")]
+    [SerializeField] private Button cancelButton;
+    [SerializeField] private TextMeshProUGUI cancelText;
+    [SerializeField] private Button selectButton;
+    [SerializeField] public TextMeshProUGUI changingText;
 
     [Header("Animation")]
     [SerializeField] private CanvasGroup canvasGroup; // 페이드 인/아웃 캔버스 그룹
@@ -39,15 +39,28 @@ public class ScrollUI : MonoBehaviour
     [Header("UI 모드 설정")]
     [SerializeField] private bool showButtons = true; // 버튼 표시 여부 (false면 카드 모드)
 
+    [Header("배경 오버레이")]
+    private GameObject backgroundOverlay; // 배경 어둡게 하는 오버레이
+    private bool useBackgroundOverlay = false; // 배경 오버레이 사용 여부
+
     private ScrollSO currentScroll; // 현재 표시중인 스크롤 데이터
     private Action<ScrollSO> onSelectCallback; // 선택 버튼을 눌렀을 때 실행할 함수를 저장하는 변수
     private Action onCancelCallback;         // 취소 버튼을 눌렀을 때 실행할 함수를 저장하는 변수
+    public event Action OnHidden; //확대된거 없앨때 쓰려고 만든 이벤트 액션함수
+    private bool shouldTriggerOnHidden = true; // OnHidden 이벤트 발생 여부 (선택 버튼 클릭 시에는 false)
+
+    //[Header("클릭 처리")]
+    //[SerializeField] private bool clickInsideSelectWhenSelectable = true; // onSelect가 있을 때 내부 클릭 -> 선택
+    //private Button cardClickCatcher; // 카드 전체를 덮는 클릭 캐처
+    //[SerializeField] private RectTransform scrollBackground;
 
     private void Awake()
     {
         if (canvasGroup == null) canvasGroup = GetComponent<CanvasGroup>();
 
-        //SetButtonsVisible(showButtons);
+        CreateBackgroundOverlay();
+
+        SetButtonsVisible(showButtons);
 
         //if (showButtons)
         //{
@@ -56,6 +69,18 @@ public class ScrollUI : MonoBehaviour
         //    if (selectButton != null) selectButton.onClick.AddListener(OnSelectButtonClick);
         //    gameObject.SetActive(false);
         //}
+        // 리스너는 항상 연결해 둡니다. 버튼은 필요 시 ShowScroll/InfoOnly에서 on/off.
+         if (cancelButton != null)
+         {
+            cancelButton.onClick.RemoveAllListeners();
+            cancelButton.onClick.AddListener(OnCancelButtonClick);
+         }
+        if (selectButton != null)
+        {
+            selectButton.onClick.RemoveAllListeners();
+            selectButton.onClick.AddListener(OnSelectButtonClick);
+        }
+        gameObject.SetActive(false); // 시작은 비활성
     }
 
     /// <summary>
@@ -64,7 +89,7 @@ public class ScrollUI : MonoBehaviour
     private void Update()
     {
         if (!gameObject.activeInHierarchy) return;
-        //if (cancelButton != null && cancelButton.gameObject.activeSelf) return;
+        if (cancelButton != null && cancelButton.gameObject.activeSelf) return;
 
         Vector2 inputPosition = Vector2.zero;
         bool inputDetected = false;
@@ -92,25 +117,62 @@ public class ScrollUI : MonoBehaviour
         }
     }
 
+    //private void EnsureCardClickCatcher()
+    //{
+    //    if (cardClickCatcher != null) return;
+
+    //    RectTransform targetParent = scrollBackground;
+    //    if (targetParent == null)
+    //    {
+    //        Transform found = transform.Find("ScrollBackground");
+    //        targetParent = (found as RectTransform) ?? (RectTransform)transform;
+    //    }
+
+    //    GameObject go = new GameObject("CardClickCatcher",typeof(RectTransform), typeof(Image), typeof(Button));
+
+    //    RectTransform rt = go.GetComponent<RectTransform>();
+
+    //    rt.SetParent(targetParent, false); 
+
+    //    rt.pivot = targetParent.pivot;
+    //    rt.anchorMin = Vector2.zero;
+    //    rt.anchorMax = Vector2.one;
+    //    rt.offsetMin = Vector2.zero;
+    //    rt.offsetMax = Vector2.zero;
+    //    rt.anchoredPosition = Vector2.zero;
+
+    //    Image img = go.GetComponent<Image>();
+    //    img.color = new Color(1f, 1f, 1f, 0f);
+    //    img.raycastTarget = true;
+
+    //    cardClickCatcher = go.GetComponent<Button>();
+    //    cardClickCatcher.transition = Selectable.Transition.None;
+    //    cardClickCatcher.onClick.AddListener(OnCardAreaClicked);
+
+    //    rt.SetAsLastSibling();
+    //}
+
     /// <summary>
     /// 버튼 표시/숨기기
     /// </summary>
-    //private void SetButtonsVisible(bool visible)
-    //{
-    //    if (cancelButton != null) cancelButton.gameObject.SetActive(visible);
-    //    if (selectButton != null) selectButton.gameObject.SetActive(visible);
-    //}
+    private void SetButtonsVisible(bool visible)
+    {
+        if (cancelButton != null) cancelButton.gameObject.SetActive(visible);
+        if (selectButton != null) selectButton.gameObject.SetActive(visible);
+    }
 
     /// <summary>
     /// 선택 버튼 텍스트를 제외/선택 모드로 변경
     /// </summary>
-    //private void SelectExcludeButton(bool isExcludeMode)
-    //{
-    //    if (changingText == null) return;
+    private void SelectExcludeButton(bool isExcludeMode)
+    {
+        if (changingText == null) return;
 
-    //    changingText.text = isExcludeMode ? "제외" : "선택";
-    //    changingText.color = isExcludeMode ? Color.red : Color.black;
-    //}
+        changingText.text = isExcludeMode ? "제외" : "선택";
+        //changingText.color = isExcludeMode ? Color.red : Color.black;
+        //현재 선택 색을 흰색으로 하고 아웃라인을 그리자 라는 내용이 나와 수정했습니다. 원래상태로 돌아간다면 위의 코드 다시 살려주세요.
+        changingText.color = isExcludeMode ? Color.red : Color.white;
+    }
 
     /// <summary>
     /// 스크롤 객체를 받아 상세보기를 표시
@@ -125,9 +187,9 @@ public class ScrollUI : MonoBehaviour
         onCancelCallback = onCancel;
 
         bool showButtons = (onSelect != null || onCancel != null);
-        //SetButtonsVisible(showButtons);
+        SetButtonsVisible(showButtons);
 
-        //if (showButtons) SelectExcludeButton(false);
+        if (showButtons) SelectExcludeButton(false);
 
         UpdateScrollDisplay();
         Show();
@@ -145,8 +207,8 @@ public class ScrollUI : MonoBehaviour
         onSelectCallback = null;
         onCancelCallback = null;
 
-        // 버튼 숨기기
-        //SetButtonsVisible(false);
+        //버튼 숨기기
+        SetButtonsVisible(false);
 
         UpdateScrollDisplay();
         Show();
@@ -161,9 +223,9 @@ public class ScrollUI : MonoBehaviour
         onSelectCallback = onExclude;
         onCancelCallback = null;
 
-        // 버튼 표시하되 텍스트를 '제외'로 변경
-        //SetButtonsVisible(true);
-        //SelectExcludeButton(true);
+        //버튼 표시하되 텍스트를 '제외'로 변경
+        SetButtonsVisible(true);
+        SelectExcludeButton(true);
 
         UpdateScrollDisplay();
         Show();
@@ -243,7 +305,11 @@ public class ScrollUI : MonoBehaviour
 
         if (descriptionText != null)
         {
-            descriptionText.text = currentScroll.scrollDescription;
+            // 플레이어 공격력을 가져와서 계산된 설명 표시
+            int playerAttack = GetPlayerAttack();
+            string calculatedDesc = currentScroll.GetCalculatedDescription(playerAttack);
+
+            descriptionText.text = calculatedDesc;
         }
 
         // ===== 6. 메인 이미지 =====
@@ -270,15 +336,30 @@ public class ScrollUI : MonoBehaviour
     /// </summary>
     private void Show()
     {
+        Debug.Log("[ScrollUI] Show() 함수 실행!");
         gameObject.SetActive(true);
+
+        // UI 최상위로 보내기
+        transform.SetAsLastSibling();
+
+        if (useBackgroundOverlay)
+        {
+            ShowBackgroundOverlay();
+        }
         canvasGroup.alpha = 0f;
         canvasGroup.blocksRaycasts = true;
         canvasGroup.interactable = true;
         transform.localScale = Vector3.one * 0.3f;
 
+        Debug.Log($"[ScrollUI] DOTween 애니메이션 시작 - alpha: {canvasGroup.alpha}, scale: {transform.localScale}");
+
         Sequence showSequence = DOTween.Sequence();
         showSequence.Append(canvasGroup.DOFade(1f, animationDuration));
         showSequence.Join(transform.DOScale(1f, animationDuration).SetEase(Ease.OutBack));
+
+        showSequence.OnComplete(() => {
+            Debug.Log($"[ScrollUI] DOTween 완료! - alpha: {canvasGroup.alpha}, scale: {transform.localScale}");
+        });
     }
 
     /// <summary>
@@ -287,13 +368,85 @@ public class ScrollUI : MonoBehaviour
     /// </summary>
     private void Hide()
     {
+        if (useBackgroundOverlay)
+        {
+            HideBackgroundOverlay();
+        }
+
         canvasGroup.blocksRaycasts = false;
         canvasGroup.interactable = false;
         Sequence hideSequence = DOTween.Sequence();
         hideSequence.Append(canvasGroup.DOFade(0f, animationDuration));
         hideSequence.Join(transform.DOScale(0.3f, animationDuration).SetEase(Ease.InBack));
-        hideSequence.OnComplete(() => gameObject.SetActive(false));
+        hideSequence.OnComplete(() =>
+        {
+            gameObject.SetActive(false);
+
+            // shouldTriggerOnHidden 플래그가 true일 때만 OnHidden 이벤트 발생
+            if (shouldTriggerOnHidden)
+            {
+                OnHidden?.Invoke();
+            }
+
+            // 플래그 초기화
+            shouldTriggerOnHidden = true;
+        });
     }
+
+    #region 배경 오버레이 시스템
+
+    /// <summary>
+    /// 배경 오버레이 사용 여부 설정 (RewardSelectionUI에서만 true로 설정)
+    /// </summary>
+    public void SetUseBackgroundOverlay(bool use)
+    {
+        useBackgroundOverlay = use;
+    }
+
+    private void CreateBackgroundOverlay()
+    {
+        Canvas parentCanvas = GetComponentInParent<Canvas>();
+        if (parentCanvas == null) return;
+
+        backgroundOverlay = new GameObject("ScrollUI_BackgroundOverlay");
+        backgroundOverlay.transform.SetParent(parentCanvas.transform, false);
+        backgroundOverlay.transform.SetSiblingIndex(transform.GetSiblingIndex());
+
+        RectTransform rect = backgroundOverlay.AddComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.sizeDelta = Vector2.zero;
+        rect.anchoredPosition = Vector2.zero;
+
+        UnityEngine.UI.Image image = backgroundOverlay.AddComponent<UnityEngine.UI.Image>();
+        image.color = new Color(0f, 0f, 0f, 0.95f);
+        image.raycastTarget = true;
+
+        CanvasGroup canvasGroup = backgroundOverlay.AddComponent<CanvasGroup>();
+        canvasGroup.alpha = 0f;
+
+        backgroundOverlay.SetActive(false);
+    }
+
+    private void ShowBackgroundOverlay()
+    {
+        if (backgroundOverlay == null) return;
+
+        backgroundOverlay.SetActive(true);
+        backgroundOverlay.GetComponent<CanvasGroup>().DOFade(1f, animationDuration);
+    }
+
+    private void HideBackgroundOverlay()
+    {
+        if (backgroundOverlay == null) return;
+
+        backgroundOverlay.GetComponent<CanvasGroup>().DOFade(0f, animationDuration).OnComplete(() =>
+        {
+            backgroundOverlay.SetActive(false);
+        });
+    }
+
+    #endregion
 
     /// <summary>
     /// 취소 버튼 클릭시 숨기기
@@ -309,6 +462,10 @@ public class ScrollUI : MonoBehaviour
     /// </summary>
     private void OnSelectButtonClick()
     {
+        // 선택 버튼으로 스크롤 선택 시에는 OnHidden 이벤트를 발생시키지 않음
+        // (스펠 그리드가 꺼지는 것을 방지)
+        shouldTriggerOnHidden = false;
+
         onSelectCallback?.Invoke(currentScroll);
         Hide();
     }
@@ -320,14 +477,82 @@ public class ScrollUI : MonoBehaviour
     {
         return currentScroll;
     }
+    
+    /// <summary>
+    /// 저장된 데이터에서 플레이어 공격력 계산
+    /// </summary>
+    private int GetPlayerAttack()
+    {
+        // 1. 기본 캐릭터 공격력 (DataManager에서)
+        int baseAttack = GetCharacterBaseAttack();
+
+        // 2. 재능 보너스 (RelicManager에서)
+        int relicBonus = GetRelicAttackBonus();
+
+        // 3. 아티팩트 보너스 (ArtifactManager에서)
+        int artifactBonus = GetArtifactAttackBonus();
+
+        return baseAttack + relicBonus + artifactBonus;
+    }
+
+    private int GetCharacterBaseAttack()
+    {
+        // 선택된 캐릭터의 기본 공격력
+        if (DataManager.Instance?.SelectedCharacterData != null)
+        {
+            return DataManager.Instance.SelectedCharacterData.stats.attack;
+        }
+        return 20; // 기본값
+    }
+
+    private int GetRelicAttackBonus()
+    {
+        if (RelicManager.Instance == null) return 0;
+
+        int bonus = 0;
+        foreach (var relicState in RelicManager.Instance.ownedRelics)
+        {
+            if (relicState.level <= 0) continue;
+
+            foreach (var effect in relicState.currentEffects)
+            {
+                if ((EffectType)effect.effectType == EffectType.공격력증가)
+                {
+                    bonus += Mathf.RoundToInt(effect.currentValue);
+                }
+            }
+        }
+        return bonus;
+    }
+
+    private int GetArtifactAttackBonus()
+    {
+        if (ArtifactManager.Instance == null) return 0;
+
+        int bonus = 0;
+        foreach (var artifact in ArtifactManager.Instance.GetPlayerArtifacts())
+        {
+            if (artifact.EffectType == ArtifactEffectType.Offense)
+                bonus += Mathf.RoundToInt(artifact.Value1);
+            if (artifact.EffectType2 == ArtifactEffectType2.Offense)
+                bonus += Mathf.RoundToInt(artifact.Value2);
+        }
+        return bonus;
+    }
 
     private void OnDestroy()
     {
         if (showButtons)
         {
-            // 상세보기 모드일 때 버튼 이벤트 정리
-            //if (cancelButton != null) cancelButton.onClick.RemoveListener(OnCancelButtonClick);
-            //if (selectButton != null) selectButton.onClick.RemoveListener(OnSelectButtonClick);
+            //상세보기 모드일 때 버튼 이벤트 정리
+            if (cancelButton != null) cancelButton.onClick.RemoveListener(OnCancelButtonClick);
+            if (selectButton != null) selectButton.onClick.RemoveListener(OnSelectButtonClick);
+        }
+
+        // 배경 오버레이 정리
+        if (backgroundOverlay != null)
+        {
+            Destroy(backgroundOverlay);
         }
     }
 }

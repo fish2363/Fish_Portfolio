@@ -16,6 +16,7 @@ public class PatternSystem : MonoBehaviour
     private ScrollSO currentScroll;
     private bool isPatternActive = false;
     private Coroutine patternCoroutine;
+    private float patternStartTime;
 
     void Update()
     {
@@ -66,9 +67,10 @@ public class PatternSystem : MonoBehaviour
         patternCoroutine = StartCoroutine(AttackPatternCoroutine(scroll));
     }
 
-    private IEnumerator AttackPatternCoroutine(ScrollSO scroll) // 공격 패턴 전체 프로세스 관리
+    private IEnumerator AttackPatternCoroutine(ScrollSO scroll)
     {
         isPatternActive = true;
+        patternStartTime = Time.time;
 
         // 패턴 UI 시작
         float accuracy = 0f;
@@ -91,34 +93,27 @@ public class PatternSystem : MonoBehaviour
             yield return StartCoroutine(WaitForPlayerInputFallback(result => accuracy = result));
         }
 
-        // 데미지 계산
-        int damage = CalculateDamage(scroll.baseDamage, accuracy);
-
-        // 패턴 정리
+        // CombatSystem을 통한 데미지 계산
+        PatternResult patternResult = new PatternResult 
+        { 
+            accuracy = accuracy, 
+            isPerfect = (accuracy >= 1.0f),
+            completionTime = Time.time - patternStartTime,
+            totalTime = scroll.timeLimit
+        };
+        
         ClearPattern();
         isPatternActive = false;
 
-        // 결과 전달 (InGameManager가 있는 경우)
         if (InGameManager.Instance != null)
         {
-            // Debug.Log("됏는데 ㅅㅂ?");
-            InGameManager.Instance.OnAttackPatternComplete(scroll, accuracy, damage);
-        }
-        else
-        {
-            Debug.Log($"공격 패턴 완료! 정확도: {accuracy:P1}, 데미지: {damage}");
+            InGameManager.Instance.OnAttackPatternComplete(scroll, patternResult);
         }
     }
 
     #endregion
 
     #region 유틸리티 메서드
-
-    /// 기본 데미지와 정확도로 최종 데미지 계산
-    private int CalculateDamage(int baseDamage, float accuracy)
-    {
-        return Mathf.RoundToInt(baseDamage * accuracy);
-    }
 
     /// 패턴 정리 (화면의 모든 패턴 오브젝트 제거)
     private void ClearPattern()

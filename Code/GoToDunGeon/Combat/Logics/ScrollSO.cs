@@ -2,6 +2,8 @@ using UnityEngine;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using Firebase.Firestore;
+using System.Data.Common;
 
 [CreateAssetMenu(fileName = "Scroll_", menuName = "Game/Scroll")]
 public class ScrollSO : ScriptableObject
@@ -12,6 +14,9 @@ public class ScrollSO : ScriptableObject
     public bool unlocked;                           //스크롤 해금여부
     [TextArea(3, 5)]
     public string scrollDescription;              // 스크롤 설명
+    [TextArea(2, 4)]
+    public string effectSummary = "";             // CSV에서 가져온 효과 설명 (수식 포함)
+
 
     [Header("속성 및 가치")]
     public ElementSystem.ElementType elementType = ElementSystem.ElementType.None; // 속성 (9가지)
@@ -40,10 +45,15 @@ public class ScrollSO : ScriptableObject
     public bool isMultiAttack = false;      // 다중공격 여부
     public int multiAttackTargets = 1;      // 다중공격 대상 수
 
+    [Header("데미지 계수(CSV 파싱용)")]
+    public float scaling1 = 1.0f;
+    public float scaling2 = 1.0f;
+    public float scaling3 = 1.0f;
+
     [Header("효과 - 디버프")]
-    //public StatusEffectType statusEffect = StatusEffectType.None; // 부여할 상태이상
+    public StatusEffectSystem.StatusEffectType statusEffect = StatusEffectSystem.StatusEffectType.None; // 부여할 상태이상
     public float statusChance = 0f;         // 상태이상 확률 (0~1)
-    public int statusDuration = 3;          // 상태이상 지속시간
+    // statusDuration은 각 상태이상별로 고정값 사용 (StatusEffectSystem에서 관리)
 
     [Header("자속보정 특수효과")]
     public bool hasSelfElementBonus = true; // 자속보정 효과 있는지
@@ -90,7 +100,7 @@ public class ScrollSO : ScriptableObject
                     _cachedUIDatabase = databases[0];
                 }
             }
-            
+
             return _cachedUIDatabase;
         }
     }
@@ -365,7 +375,7 @@ public class ScrollSO : ScriptableObject
             default: return 50f;
         }
     }
-    
+
     /// <summary>
     /// 스크롤 카테고리를 한글 텍스트로 변환
     /// </summary>
@@ -448,24 +458,24 @@ public class ScrollSO : ScriptableObject
     {
         Debug.Log($"=== {scrollName} UI 이미지 테스트 시작 ===");
         Debug.Log($"📊 등급: {rarity}, 원소: {elementType}");
-        
+
         // 카드 배경 테스트
         var cardBg = GetCardBackground();
         Debug.Log($"📱 카드 배경: {(cardBg ? cardBg.name : "❌ 없음")}");
-        
+
         // 원소 젬 테스트  
         var gem = GetElementGem();
         Debug.Log($"💎 원소 젬: {(gem ? gem.name : "❌ 없음")}");
-        
+
         // 테두리들 테스트
         var frame01 = GetFrame01();
         var frame02 = GetFrame02();
         Debug.Log($"🖼️ 01번 테두리: {(frame01 ? frame01.name : "❌ 없음")}");
         Debug.Log($"🖼️ 02번 테두리: {(frame02 ? frame02.name : "❌ 없음")}");
-        
+
         // ScrollUIDatabase 연결 상태 확인
         Debug.Log($"🔗 Database 연결: {(scrollUIDatabase ? $"✅ {scrollUIDatabase.name}" : "❌ 연결 실패")}");
-        
+
         Debug.Log($"=== {scrollName} 테스트 완료 ===");
     }
 
@@ -482,5 +492,67 @@ public class ScrollSO : ScriptableObject
 
     #endregion
 
+    #region 동적 effect_summary 설명 부분
 
+    public string GetCalculatedDescription(int playerAttack = 0)
+    {
+        string description = string.IsNullOrEmpty(effectSummary) ? scrollDescription : effectSummary;
+
+        if (playerAttack > 0)
+        {
+            description = ProcessDamageFormula(description, playerAttack);
+            description = ProcessSecondaryDamageFormula(description, playerAttack);
+            description = ProcessThirdDamageFormula(description, playerAttack);
+        }
+
+        return description;
+    }
+
+    /// <summary>
+    /// 메인 데미지 처리 : value + scaling1*ad 
+    /// </summary>
+    private string ProcessDamageFormula(string text, int playerAttack)
+    {
+        var pattern = @"value \+ scaling1\*ad";
+
+        if (System.Text.RegularExpressions.Regex.IsMatch(text, pattern))
+        {
+            int caculatedDamage = baseDamage + Mathf.RoundToInt(scaling1 * playerAttack);
+            text = System.Text.RegularExpressions.Regex.Replace(text, pattern, caculatedDamage.ToString());
+        }
+
+        return text;
+    }
+    
+    /// <summary>
+    /// 보조 데미지 공식 처리: value + scaling2*ad
+    /// </summary>
+    private string ProcessSecondaryDamageFormula(string text, int playerAttack)
+    {
+        var pattern = @"value \+ scaling2\*ad";
+        if (System.Text.RegularExpressions.Regex.IsMatch(text, pattern))
+        {
+            int calculatedDamage = baseDamage + Mathf.RoundToInt(scaling2 * playerAttack);
+            text = System.Text.RegularExpressions.Regex.Replace(text, pattern, calculatedDamage.ToString());
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// 3타 데미지 공식 처리: value + scaling3*ad (삼연격용)
+    /// </summary>
+    private string ProcessThirdDamageFormula(string text, int playerAttack)
+    {
+        var pattern = @"value \+ scaling3\*ad";
+        if (System.Text.RegularExpressions.Regex.IsMatch(text, pattern))
+        {
+            int calculatedDamage = baseDamage + Mathf.RoundToInt(scaling3 * playerAttack);
+            text = System.Text.RegularExpressions.Regex.Replace(text, pattern, calculatedDamage.ToString());
+        }
+
+        return text;
+    }
+
+    #endregion
 }

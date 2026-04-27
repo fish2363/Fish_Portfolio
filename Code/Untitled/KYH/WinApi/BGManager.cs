@@ -3,9 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using UnityEngine;
-/// <summary>
-/// 아ㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅁㄴ롱ㅎㄴ덕솢미ㅓㅇㅁㄷ림ㄻ짖ㄷㅁ곡ㄷㅈ가ㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅏㅇㅁㄴㅀ뮺ㅂㅁ더륮ㅁㄷㄹㄷ루모르겟다
-/// </summary>
+
 public class BGManager : MonoSingleton<BGManager>
 {
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -36,7 +34,6 @@ public class BGManager : MonoSingleton<BGManager>
         result = new Texture2D(width, height, TextureFormat.ARGB32, false);
         offset.x = (baseImage.width / 2) - (Screen.width / 2);
         offset.y = (baseImage.height / 2) - (Screen.height / 2);
-        Debug.Log("신이시여");
 
         for (int y = 0; y < height; y++)
         {
@@ -45,7 +42,6 @@ public class BGManager : MonoSingleton<BGManager>
                 result.SetPixel(x, y, baseImage.GetPixel(x, y));
             }
         }
-        Debug.Log("신이시여");
 
         for (int y = 0; y < overlayImage.height; y++)
         {
@@ -60,13 +56,11 @@ public class BGManager : MonoSingleton<BGManager>
                 }
             }
         }
-        Debug.Log("신이시여");
         return result;
     }
 
     public void SetModifiedBG(Texture2D origin, Texture2D modified)
     {
-        // 배경화면 2개를 곂쳐서 최종 적용해주는 기능
         File.WriteAllBytes(GetCurrentDesktopWallpaperPath(), OverlayImages(origin, modified).EncodeToPNG());
 
 
@@ -78,7 +72,7 @@ public class BGManager : MonoSingleton<BGManager>
         Texture2D texture = new Texture2D(2, 2);
         defaultBGByte = File.ReadAllBytes(path);
 
-        if (ImageConversion.LoadImage(texture, defaultBGByte)) // jpg, png, jpeg만 됨
+        if (ImageConversion.LoadImage(texture, defaultBGByte))
         {
             Color[] bgColors = texture.GetPixels();
 
@@ -90,7 +84,6 @@ public class BGManager : MonoSingleton<BGManager>
         }
         else
         {
-            Debug.Log("webp 확장자입니다.");
             texture = LoadWebpImage(defaultBGByte);
         }
         Debug.Log("Texture Loaded");
@@ -140,7 +133,6 @@ public class BGManager : MonoSingleton<BGManager>
 
     public Texture2D GetPCWallpaper()
     {
-        Debug.Log("신이시여");
         return LoadTextureFromPath(GetCurrentDesktopWallpaperPath());
     }
 
@@ -161,7 +153,6 @@ public class BGManager : MonoSingleton<BGManager>
             return;
         }
 
-        // 기본 배경화면 롤백
         File.WriteAllBytes(GetCurrentDesktopWallpaperPath(), defaultBGByte);
         SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, GetCurrentDesktopWallpaperPath(), SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE);
     }

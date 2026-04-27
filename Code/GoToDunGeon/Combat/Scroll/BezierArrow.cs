@@ -1,181 +1,190 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
+using System.Collections;
 
+/// <summary>
+/// UI용 슬더스 스타일 뼈 기반 화살표
+/// - start → end 사이를 segments 개수로 나눠 RectTransform 배치
+/// - 각 Segment는 다음 Segment 방향 바라봄
+/// - 마지막 Segment는 화살촉 Prefab으로
+/// - 화살촉은 마우스 방향을 바라봄
+/// </summary>
 public class BezierArrow : MonoBehaviour
 {
     [Header("Targets")]
-    [field: SerializeField] public RectTransform BezierHead { get; private set; }
-
-    private RectTransform _startTarget;
-    private RectTransform _endTarget;
-    private bool _isActive;
-    private bool _inputEnabled = true;
+    [field: SerializeField] public RectTransform baizerHead { get; private set; }
+    RectTransform start;
+    RectTransform end;
+    bool isStart;
+    bool inputEnabled = true; // 입력 활성화 상태
 
     [Header("Prefabs")]
-    [SerializeField] private GameObject _segmentPrefab;
-    [SerializeField] private GameObject _arrowHeadPrefab;
+    public GameObject segmentPrefab;
+    public GameObject arrowHeadPrefab;
 
-    [Header("Curve Settings")]
-    [Range(2, 50)][SerializeField] private int _segments = 12;
-    [SerializeField] private float _curvature = 50f;
-    [SerializeField] private float _wobbleAmplitude = 0f;
-    [SerializeField] private float _wobbleSpeed = 2f;
+    [Header("Curve")]
+    public int segments = 12;
+    public float curvature = 50f;
+    public float wobbleAmplitude = 0f;
+    public float wobbleSpeed = 2f;
 
     [Header("Style")]
-    [SerializeField] private Gradient _colorOverLife;
-    [SerializeField] private float _spriteUpAngle = 90f;
-    private Color _baseColor = Color.red;
+    public Gradient colorOverLife;
+    private Color baseColor = Color.red;
 
-    // 캐싱된 컴포넌트들
-    private RectTransform[] _bones;
-    private Image[] _boneImages;
-    private RectTransform _arrowHeadRT;
-    private Image _arrowHeadImage;
-    private RectTransform _container;
+    private RectTransform[] bones;
+    private RectTransform arrowHeadRT;
+    private Image arrowHeadImage;
+    private Image[] arrowHeadSprite;
 
-    [Header("UI Camera Settings")]
-    [SerializeField] private Camera _uiCamera;
+    private Vector3 p0, p1, p2, p3;
 
-    private void Awake()
+    private RectTransform container;   
+    private Canvas canvas;             
+    [SerializeField] private float spriteUpAngle = 90f; 
+
+    void Awake()
     {
-        if (_segmentPrefab == null || _arrowHeadPrefab == null)
+        if (segmentPrefab == null || arrowHeadPrefab == null)
         {
-            Debug.LogError("할당되지 않았습니다.");
+            Debug.LogError("SegmentPrefab과 ArrowHeadPrefab을 할당하세요!");
             return;
         }
 
-        _container = (RectTransform)transform;
-        InitializePool();
-    }
-
-    private void InitializePool()
-    {
-        _bones = new RectTransform[_segments];
-        _boneImages = new Image[_segments];
-
-        for (int i = 0; i < _segments; i++)
+        bones = new RectTransform[segments];
+        arrowHeadSprite = new Image[segments];
+        for (int i = 0; i < segments; i++)
         {
-            GameObject go = Instantiate(_segmentPrefab, _container);
+            GameObject go = Instantiate(segmentPrefab, transform);
+            go.name = "Segment_" + i;
+            bones[i] = go.GetComponent<RectTransform>();
+            arrowHeadSprite[i] = go.GetComponent<Image>();
             go.SetActive(false);
-
-            _bones[i] = go.GetComponent<RectTransform>();
-            _boneImages[i] = go.GetComponent<Image>();
         }
 
-        GameObject headGO = Instantiate(_arrowHeadPrefab, _container);
-        headGO.SetActive(false);
+        GameObject headGO = Instantiate(arrowHeadPrefab, transform);
+        headGO.name = "ArrowHead";
+        arrowHeadRT = headGO.GetComponent<RectTransform>();
+        arrowHeadRT.gameObject.SetActive(false);
+        arrowHeadImage = arrowHeadRT.GetComponent<Image>();
 
-        _arrowHeadRT = headGO.GetComponent<RectTransform>();
-        _arrowHeadImage = _arrowHeadRT.GetComponent<Image>();
-        BezierHead = _arrowHeadRT;
+        container = (RectTransform)transform;
+        canvas = GetComponentInParent<Canvas>();
     }
 
-    public void SetTargetColor(bool isTargetValid)
+    public void CanFindTarget(bool isTrue)
     {
-        _baseColor = isTargetValid ? Color.green : Color.red;
+        baseColor = isTrue ? Color.green : Color.red;
+        //UpdateBones();
+        //UpdateArrowHead();
     }
 
-    public void StartBezier(RectTransform start, RectTransform end)
+    public void StartBazier(RectTransform start, RectTransform end)
     {
-        _isActive = true;
-        _startTarget = start;
-        _endTarget = end;
+        isStart = true;
+        this.start = start;
+        this.end = end;
 
-        _arrowHeadRT.gameObject.SetActive(true);
-        foreach (var rt in _bones)
-        {
+        arrowHeadRT.gameObject.SetActive(true);
+        foreach (RectTransform rt in bones)
             rt.gameObject.SetActive(true);
-        }
     }
 
-    public void StopBezier()
+    public void StopBazier()
     {
-        _isActive = false;
-        _startTarget = null;
-        _endTarget = null;
+        isStart = false;
+        this.start = null;
+        this.end = null;
 
-        _arrowHeadRT.gameObject.SetActive(false);
-        foreach (var rt in _bones)
-        {
+        arrowHeadRT.gameObject.SetActive(false);
+        foreach (RectTransform rt in bones)
             rt.gameObject.SetActive(false);
-        }
     }
 
-    private void Update()
+    //void Update()
+    //{
+    //    if (!isStart || start == null || end == null || !inputEnabled) return;
+
+    //    Vector3 startPos = start.position;
+    //    Vector3 endPos = end.position;
+
+    //    Vector3 dir = endPos - startPos;
+    //    float dist = dir.magnitude;
+    //    Vector3 tangent = dir.normalized;
+    //    Vector3 normal = Vector3.Cross(Vector3.forward, tangent).normalized;
+    //    float bend = curvature + (wobbleAmplitude > 0f ? Mathf.Sin(Time.time * wobbleSpeed) * wobbleAmplitude : 0f);
+
+    //    p0 = startPos;
+    //    p3 = endPos;
+    //    p1 = startPos + tangent * (dist * 0.5f) + normal * bend;
+    //    p2 = endPos - tangent * (dist * 0.5f) + normal * bend;
+
+    //    UpdateBones();
+    //    UpdateArrowHead();
+    //}
+
+    void Update()
     {
-        if (!_isActive || _startTarget == null || _endTarget == null || !_inputEnabled)
-            return;
+        float lastAngle = 0f; 
+        if (!isStart || start == null || end == null || !inputEnabled) return;
 
-        DrawCurve();
-    }
+        Vector2 p0 = ToLocal(start);
+        Vector2 p2 = ToLocal(end);
 
-    private void DrawCurve()
-    {
-        Vector2 p0 = ToLocal(_startTarget);
-        Vector2 p2 = ToLocal(_endTarget);
-        Vector2 direction = p2 - p0;
+        Vector2 d = p2 - p0;
+        if (d.sqrMagnitude < 0.0001f) return;
 
-        if (direction.sqrMagnitude < 0.0001f) return;
+        Vector2 tng = d.normalized;
+        Vector2 nrm = new Vector2(-tng.y, tng.x); 
 
-        Vector2 tangent = direction.normalized;
-        Vector2 normal = new Vector2(-tangent.y, tangent.x);
-        float wobble = (_wobbleAmplitude > 0f) ? Mathf.Sin(Time.unscaledTime * _wobbleSpeed) * _wobbleAmplitude : 0f;
+        float wobble = (wobbleAmplitude > 0f) ? Mathf.Sin(Time.unscaledTime * wobbleSpeed) * wobbleAmplitude : 0f;
+        Vector2 p1 = (p0 + p2) * 0.5f + (curvature + wobble) * nrm;
 
-        Vector2 p1 = (p0 + p2) * 0.5f + (_curvature + wobble) * normal;
-
-        for (int i = 0; i < _segments; i++)
+        for (int i = 0; i < segments; i++)
         {
-            float t = (_segments > 1) ? (float)i / (_segments - 1) : 1f;
-            Vector2 pos = CalculateQuadraticBezierPoint(p0, p1, p2, t);
-            _bones[i].anchoredPosition = pos;
+            float t = (segments > 1) ? i / (float)(segments - 1) : 1f;
+            Vector2 pos = BezierPointQuad(p0, p1, p2, t);
+            bones[i].anchoredPosition = pos;
 
-            if (i < _segments - 1)
+            if (i < segments - 1)
             {
-                float tNext = Mathf.Min(1f, (float)(i + 1) / (_segments - 1));
-                Vector2 nextPos = CalculateQuadraticBezierPoint(p0, p1, p2, tNext);
-                Vector2 dirToNext = (nextPos - pos).normalized;
-
-                float angle = Mathf.Atan2(dirToNext.y, dirToNext.x) * Mathf.Rad2Deg;
-                _bones[i].localRotation = Quaternion.Euler(0, 0, angle + _spriteUpAngle + 180f);
+                float tNext = Mathf.Min(1f, (i + 1) / (float)(segments - 1));
+                Vector2 next = BezierPointQuad(p0, p1, p2, tNext);
+                Vector2 dir = (next - pos).normalized;
+                float ang = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+                bones[i].localRotation = Quaternion.Euler(0, 0, ang + spriteUpAngle + 180f);
             }
 
-            if (_boneImages[i] != null)
+            if (arrowHeadSprite[i] != null)
             {
-                Color gradientColor = _colorOverLife.Evaluate(1f - t);
-                _boneImages[i].color = _baseColor * gradientColor;
+                Color grad = colorOverLife.Evaluate(1f - t);
+                arrowHeadSprite[i].color = baseColor * grad;
             }
         }
 
-        // 화살촉(Head) 배치 및 회전
-        Vector2 headTangent = CalculateQuadraticBezierTangent(p0, p1, p2, 1f);
-        float headAngle = Mathf.Atan2(headTangent.y, headTangent.x) * Mathf.Rad2Deg;
-
-        _arrowHeadRT.anchoredPosition = p2;
-        _arrowHeadRT.localRotation = Quaternion.Euler(0, 0, headAngle + _spriteUpAngle - 90f);
-
-        if (_arrowHeadImage != null)
-            _arrowHeadImage.color = _baseColor;
+        Vector2 tan = BezierTangentQuad(p0, p1, p2, 1f);  
+        float headAng = Mathf.Atan2(tan.y, tan.x) * Mathf.Rad2Deg;
+        arrowHeadRT.anchoredPosition = p2;
+        arrowHeadRT.localRotation = Quaternion.Euler(0, 0, headAng + spriteUpAngle - 90f);
+        if (arrowHeadImage != null) arrowHeadImage.color = baseColor;
     }
 
-    private Vector2 ToLocal(RectTransform target)
+
+    Vector2 ToLocal(RectTransform target)
     {
-        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(_uiCamera, target.position);
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(_container, screenPoint, _uiCamera, out Vector2 localPoint);
-        return localPoint;
+        Vector2 screen = RectTransformUtility.WorldToScreenPoint(canvas ? canvas.worldCamera : null, target.position);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(container, screen, canvas ? canvas.worldCamera : null, out var local);
+        return local;
     }
 
-    #region Bezier Math
-
-    private static Vector2 CalculateQuadraticBezierPoint(Vector2 p0, Vector2 p1, Vector2 p2, float t)
+    static Vector2 BezierPointQuad(Vector2 p0, Vector2 p1, Vector2 p2, float t)
     {
         float u = 1f - t;
         return (u * u * p0) + (2f * u * t * p1) + (t * t * p2);
     }
-
-    private static Vector2 CalculateQuadraticBezierTangent(Vector2 p0, Vector2 p1, Vector2 p2, float t)
+    static Vector2 BezierTangentQuad(Vector2 p0, Vector2 p1, Vector2 p2, float t)
     {
         return 2f * (1f - t) * (p1 - p0) + 2f * t * (p2 - p1);
     }
-
-    #endregion
 }
