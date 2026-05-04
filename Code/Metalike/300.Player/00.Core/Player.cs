@@ -10,15 +10,12 @@ using UnityEngine;
 [Provide]
 public class Player : Entity, IDependencyProvider
 {
-    [field: SerializeField] public PlayerInputSO PlayerInput { get; private set; }
-
     [SerializeField] private StateDataSO[] stateDataList;
     [SerializeField] private CharacterData defalutCharacter;
     
     public CharacterData CurrentCharacter { get; private set; }
 
     public EntityStateMachine _stateMachine;
-    public Action<bool> OnStunEvent;
     public Action OnChangeEvent;
 
     protected List<ICharacterChangeReceiver> _changeInfos = new();
@@ -46,7 +43,6 @@ public class Player : Entity, IDependencyProvider
         OnDeathEvent.AddListener(HandleDeadEvent);
 
         Bus<ChangeCharacterEvent>.OnEvent += ChangeCharacter;
-        Bus<GameStartEvents>.OnEvent += StartGame;
 
         GetChangableComponents();
     }
@@ -60,7 +56,6 @@ public class Player : Entity, IDependencyProvider
     protected override void OnDestroy()
     {
         Bus<ChangeCharacterEvent>.OnEvent -= ChangeCharacter;
-        Bus<GameStartEvents>.OnEvent -= StartGame;
 
         OnHitEvent.RemoveListener(HandleHitEvent);
         OnDeathEvent.RemoveListener(HandleDeadEvent);
@@ -76,18 +71,6 @@ public class Player : Entity, IDependencyProvider
         //   ChangeState("DEAD", true);
     }
 
-    public void OnStun(float value)
-    {
-        StartCoroutine(StunRoutine(value));
-    }
-
-    private IEnumerator StunRoutine(float value)
-    {
-        OnStunEvent?.Invoke(true);
-        yield return new WaitForSeconds(value);
-        OnStunEvent?.Invoke(false);
-    }
-
     private void HandleHitEvent()
     {
         //const string hit = "HIT";
@@ -95,20 +78,13 @@ public class Player : Entity, IDependencyProvider
         //     ChangeState(hit, true);
     }
 
-    public void StartGame(GameStartEvents evt)
-    {
-        const string idle = "IDLE";
-        _stateMachine.ChangeState(idle);
-        Bus<ChangeCharacterEvent>.Raise(new ChangeCharacterEvent(defalutCharacter));
-    }
-
     private void Update()
     {
         _stateMachine.UpdateStateMachine();
     }
 
-    public void ChangeState(string newStateName, bool force = false)
-        => _stateMachine.ChangeState(newStateName, force);
+    public void ChangeState(string newStateName)
+        => _stateMachine.ChangeState(newStateName);
 
     public void KnockBack(Vector3 direction, MovementDataSO knockbackMovement)
     {
