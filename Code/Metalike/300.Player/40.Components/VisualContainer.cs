@@ -1,11 +1,14 @@
+using GondrLib.Dependencies;
+using GondrLib.ObjectPool.RunTime;
 using System;
 using UnityEngine;
 
 public class VisualContainer : MonoBehaviour, ICharacterChangeReceiver, IEntityComponent
 {
-    public GameObject CurrentVisual { get; private set; }
+    [HideInInspector][Inject] public PoolManagerMono poolManager;
+    public PlayerVisual CurrentVisual { get; private set; }
 
-    public event Action<GameObject> OnVisualChanged;
+    public event Action<PlayerVisual> OnVisualChanged;
     public MeshContainer CurrentMesh { get; private set; }
 
     private Entity owner;
@@ -17,16 +20,15 @@ public class VisualContainer : MonoBehaviour, ICharacterChangeReceiver, IEntityC
         if (CurrentVisual != null)
             OnVisualChanged?.Invoke(CurrentVisual);
     }
-    public void OnVisualOutline(bool visible)
-    {
-        CurrentMesh.outlinable.enabled = visible;
-    }
+    
     public void OnCharacterChanged(CharacterData info)
     {
-        if (CurrentVisual != null) Destroy(CurrentVisual);
+        if (CurrentVisual != null) poolManager.Push(CurrentVisual);
 
-        CurrentVisual = Instantiate(info.visual, transform);
-        CurrentMesh = CurrentVisual.GetComponent<MeshContainer>();
+        CurrentVisual = poolManager.Pop<PlayerVisual>(info.visual);
+        CurrentVisual.transform.SetParent(transform);
+        CurrentVisual.InitalSetting();
+        CurrentMesh = CurrentVisual.CurrentMesh;
 
         OnVisualChanged?.Invoke(CurrentVisual);
     }

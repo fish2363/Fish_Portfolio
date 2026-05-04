@@ -1,4 +1,5 @@
 using Assets.Work.CDH.Code.Weapons;
+using GondrLib.ObjectPool.RunTime;
 using Public.Core.Entity;
 using System;
 using UnityEngine;
@@ -18,6 +19,6 @@ public class CharacterData : ScriptableObject
 
     public WeaponDataSO defaultWeapon;
 
-    public GameObject visual;
+    public PoolItemSO visual;
     public GameObject armVisual;
 }

@@ -10,9 +10,12 @@ public struct StatContainer
 
 public class PlayerStatCompo : EntityStatCompo, ICharacterChangeReceiver
 {
+    [SerializeField] private CharacterData defalutCharacter;
     public override void Initialize(Entity _entity)
     {
         Owner = _entity;
+        _statContainer = defalutCharacter.unitStat;
+        InitializeStat(_statContainer);
     }
 
     private void InitializeStat(StatContainer statContainer)
