@@ -1,0 +1,224 @@
+using Cysharp.Threading.Tasks;
+using InputControl;
+using ManagingSystem;
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using Object = UnityEngine.Object;
+
+public class UIManager : BaseManager<UIManager>
+{
+    [SerializeField] private UIInputReader inputSO;
+    [SerializeField] private Transform[] uiParents;
+
+    private readonly Dictionary<Type, UIBase> _uiMap = new();
+    private readonly Dictionary<Type, UniTask<UIBase>> _loadingTasks = new();
+
+    // Stack 대신 List — 중간 제거(Hide<T>) 지원
+    private readonly List<UIBase> _popupStack = new();
+    private readonly List<UIBase> _fixedStack = new();
+
+    #region Init & Release
+
+    protected override UniTask OnInit()
+    {
+        _uiMap.Clear();
+        _loadingTasks.Clear();
+        _popupStack.Clear();
+        _fixedStack.Clear();
+
+        if (inputSO != null)
+        {
+            inputSO.OnPauseClickEvent -= TryCloseByEsc;
+            inputSO.OnPauseClickEvent += TryCloseByEsc;
+        }
+
+        return UniTask.CompletedTask;
+    }
+
+    protected override void OnRelease()
+    {
+        if (inputSO != null)
+            inputSO.OnPauseClickEvent -= TryCloseByEsc;
+
+        foreach (var ui in _uiMap.Values)
+        {
+            if (ui != null)
+                Object.Destroy(ui.gameObject);
+        }
+
+        _uiMap.Clear();
+        _loadingTasks.Clear();
+        _popupStack.Clear();
+        _fixedStack.Clear();
+    }
+
+    #endregion
+
+    #region Public API
+    public void NotifyHidden(UIBase ui)
+    {
+        RemoveFromStack(ui);
+    }
+    public bool IsOpened<T>() where T : UIBase
+    {
+        return _uiMap.TryGetValue(typeof(T), out UIBase ui) && ui.gameObject.activeSelf;
+    }
+
+    public async UniTask<T> Show<T>(params object[] param) where T : UIBase
+    {
+        UIBase ui = await GetOrCreateAsync(typeof(T));
+        if (ui == null) return null;
+
+        T typedUI = ui as T;
+
+        if (!typedUI.CanOpen(param)) return null;
+
+        PushToStack(typedUI);
+        typedUI.Show(param);
+        return typedUI;
+    }
+
+    // 최상단 닫기
+    public void Hide(params object[] param)
+    {
+        if (TryCloseTop(_fixedStack, param)) return;
+        TryCloseTop(_popupStack, param);
+    }
+
+    
+
+    // isDestroyAtClosed UI가 Destroy될 때 호출
+    public void RemoveCache(Type type)
+    {
+        _uiMap.Remove(type);
+    }
+
+    #endregion
+
+    #region Create
+
+    private async UniTask<UIBase> GetOrCreateAsync(Type type)
+    {
+        if (_uiMap.TryGetValue(type, out UIBase existing) && existing != null)
+            return existing;
+
+        if (_loadingTasks.TryGetValue(type, out var ongoing))
+            return await ongoing;
+
+        var task = CreateAsync(type).Preserve();
+        _loadingTasks[type] = task;
+
+        try { return await task; }
+        finally { _loadingTasks.Remove(type); }
+    }
+
+    private async UniTask<UIBase> CreateAsync(Type type)
+    {
+        string fileName = type.Name;
+
+        // 프리팹은 항상 GameObject로 로드
+        // 캐시 히트 시 즉시 반환, 아니면 Addressables 로드
+        GameObject prefab = ResourceManager.Instance.Get<GameObject>(fileName);
+        if (prefab == null)
+            prefab = await ResourceManager.Instance.LoadAsync<GameObject>(fileName);
+
+        if (prefab == null)
+        {
+            Debug.LogError($"[UIManager] 프리팹 로드 실패: '{fileName}'");
+            return null;
+        }
+
+        UIBase prefabUI = prefab.GetComponent<UIBase>();
+        if (prefabUI == null)
+        {
+            Debug.LogError($"[UIManager] UIBase 없음: '{fileName}'");
+            return null;
+        }
+
+        Transform parent = uiParents[(int)prefabUI.uiLayer];
+        GameObject go = Object.Instantiate(prefab, parent);
+        go.name = fileName;
+
+        UIBase ui = go.GetComponent<UIBase>();
+        if (ui == null)
+        {
+            Debug.LogError($"[UIManager] 인스턴스에 UIBase 없음: '{fileName}'");
+            Object.Destroy(go);
+            return null;
+        }
+
+        _uiMap[type] = ui;
+        return ui;
+    }
+
+    #endregion
+
+    #region Stack
+
+    private void PushToStack(UIBase ui)
+    {
+        List<UIBase> stack = GetStack(ui.uiLayer);
+        if (stack == null) return;
+
+        // 이미 스택에 있으면 중복 push 방지
+        if (!stack.Contains(ui))
+            stack.Add(ui);
+
+        ui.transform.SetAsLastSibling();
+    }
+
+    private void RemoveFromStack(UIBase ui)
+    {
+        _popupStack.Remove(ui);
+        _fixedStack.Remove(ui);
+    }
+
+    private void TryCloseByEsc()
+    {
+        UIBase top = null;
+
+        if (_fixedStack.Count > 0) top = _fixedStack[^1];
+        else if (_popupStack.Count > 0) top = _popupStack[^1];
+
+        if (top == null || !top.canCloseByEsc) return;
+
+        top.Hide();
+    }
+
+    private bool TryCloseTop(List<UIBase> stack, object[] param)
+    {
+        if (stack.Count == 0) return false;
+
+        UIBase top = stack[^1];
+        stack.RemoveAt(stack.Count - 1);
+        top.Hide(param);
+        return true;
+    }
+
+    public T Get<T>() where T : UIBase
+    {
+        _uiMap.TryGetValue(typeof(T), out UIBase ui);
+        return ui as T;
+    }
+
+    public void Hide<T>(params object[] param) where T : UIBase
+    {
+        if (!_uiMap.TryGetValue(typeof(T), out UIBase ui)) return;
+        ui.Hide(param);  // RemoveFromStack은 NotifyHidden이 처리
+    }
+
+    public void CloseUI(UIBase ui)
+    {
+        ui.Hide();  // 마찬가지
+    }
+
+    private List<UIBase> GetStack(EUILayer layer) => layer switch
+    {
+        EUILayer.Popup => _popupStack,
+        EUILayer.Fixed => _fixedStack,
+        _ => null
+    };
+
+    #endregion
+}
