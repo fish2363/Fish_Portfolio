@@ -6,10 +6,10 @@ using GondrLib.ObjectPool.RunTime;
 [Serializable]
 public class SkillCastCreateProviderEffectDef : IModuleEffectDef
 {
-    [Header("»ý¼º ¼³Á¤")]
-    public int spawnCount = 3;             // »ý¼º °³¼ö (±âÁ¸ bombCount)
-    public float spawnRadius = 2f;         // Èð»Ñ¸± ¹Ý°æ
-    public PoolItemSO providerItemPrefab;  // ÆøÅº/ÀåÆÇ ÇÁ¸®ÆÕ (±âÁ¸ bombModelPrefab)
+    [Header("ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½")]
+    public int spawnCount = 3;             // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ bombCount)
+    public float spawnRadius = 2f;         // ï¿½ï¿½Ñ¸ï¿½ ï¿½Ý°ï¿½
+    public PoolItemSO providerItemPrefab;  // ï¿½ï¿½Åº/ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ bombModelPrefab)
     public StatSO damageStat;
     public AttackDataSO attackData;
 
@@ -47,7 +47,11 @@ public class SkillCastCreateProviderEffect : IExecutableEffect, ISynergyProvider
 
     public void Execute(EffectContext ctx)
     {
-        if (_def.providerItemPrefab == null) return;
+        if (_owner == null || _controller == null || _statCompo == null)
+        return;
+
+    if (_def.providerItemPrefab == null || _def.attackData == null || _def.damageStat == null)
+        return;
 
         Vector3 centerPos = _owner.transform.position;
         var damageData = _controller.DamageCompo.CalculateDamage(_statCompo.GetStat(_def.damageStat), _def.attackData);

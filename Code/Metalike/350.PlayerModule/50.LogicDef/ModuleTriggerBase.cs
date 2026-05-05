@@ -35,6 +35,8 @@ public abstract class ModuleTriggerBase<TDef> : IModuleLogic, IModuleEffectConta
                 continue;
 
             IModuleEffect effect = effectDef.CreateEffect();
+            if (effect == null)
+                continue;
             effect.OnEquip(owner);
             _effects.Add(effect);
         }
