@@ -23,10 +23,6 @@ public class GameManager : MonoSingleton<GameManager>
     }
     private async UniTask InitManagers()
     {
-        await MapManager.Instance.InitAsync();
-        await RoomManager.Instance.InitAsync();
-        await LevelUIManager.Instance.InitAsync();
-
         await ResourceManager.Instance.InitAsync();
         await DataManager.Instance.InitAsync();
 
@@ -35,20 +31,12 @@ public class GameManager : MonoSingleton<GameManager>
                 AudioManager.Instance.InitAsync(),
                 InputManager.Instance.InitAsync(),
                 TimelineManager.Instance.InitAsync(),
-                CameraManager.Instance.InitAsync(),
-                ModuleManager.Instance.InitAsync(),
-                StopManager.Instance.InitAsync(),
                 VolumeManager.Instance.InitAsync(),
                 CursorManager.Instance.InitAsync()
             );
 
-        await WeaponInventoryManager.Instance.InitAsync();
-
         GameFlowManager.Instance.ChangeState(defalutState);
-    }
 
-    private void Start()
-    {
         OnStartEvent?.Invoke();
     }
 
