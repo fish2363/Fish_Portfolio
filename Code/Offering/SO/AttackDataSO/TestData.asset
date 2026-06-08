@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 433f94eeb68de594cb8d4ea50fb78b76, type: 3}
+  m_Name: TestData
+  m_EditorClassIdentifier: Assembly-CSharp::AttackDataSO
+  damageType: 1
+  attackName: TestData
+  movementData: {fileID: 11400000, guid: f842975017fd6bc449af92a81a778fe6, type: 2}
+  damageMultiplier: 1
+  damageIncrease: 1
+  isPowerAttack: 0
+  impulseForce: 0
+  knockBackMovement: {fileID: 11400000, guid: 1caf919dbb984154d812c462dd3b9c50, type: 2}

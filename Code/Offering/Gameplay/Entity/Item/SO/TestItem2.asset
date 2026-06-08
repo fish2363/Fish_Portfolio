@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a705eae56d5f274cabb3f7e4143292f, type: 3}
+  m_Name: TestItem2
+  m_EditorClassIdentifier: Assembly-CSharp::ItemSO
+  weaponName: Test
+  weaponDescription: "\uD14C\uC2A4\uD2B8 \uC785\uB2C8\uB2E4"
+  visualPrefab: {fileID: 0}
+  slotType: 0
+  equipPosition: {x: 0, y: 0, z: 0}
+  equipRotation: {x: 0, y: 0, z: 0}
+  equipScale: {x: 0, y: 0, z: 0}
+  dropScale: {x: 1, y: 1, z: 1}
+  effectDefinitions:
+  - rid: 7596566042799505408
+  - rid: 7596566042799505409
+  references:
+    version: 2
+    RefIds:
+    - rid: 7596566042799505408
+      type: {class: EquipStatBoostItemDef, ns: , asm: Assembly-CSharp}
+      data:
+        cooldownReducePercent: 0.564
+        statSO: {fileID: 11400000, guid: 3af3310abe4c7a14ba02b08eab20de59, type: 2}
+    - rid: 7596566042799505409
+      type: {class: EquipStatBoostItemDef, ns: , asm: Assembly-CSharp}
+      data:
+        cooldownReducePercent: 0.726
+        statSO: {fileID: 11400000, guid: b7c2ab6ecd25973479f945b88b8a201e, type: 2}

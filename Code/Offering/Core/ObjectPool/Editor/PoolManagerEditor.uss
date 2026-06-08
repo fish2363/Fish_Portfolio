@@ -1,0 +1,36 @@
+.scroll_view {
+    flex-grow: 1;
+}
+
+.inspector_view {
+    flex-grow: 1;
+}
+
+.top_bar {
+    flex-basis: 45px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-right: 20px;
+    padding-left: 20px;
+    border-bottom-color: rgb(140, 140, 140);
+    border-bottom-width: 2px;
+}
+
+.create_btn {
+    font-size: 14px;
+    background-color: rgb(149, 0, 0);
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-right: 12px;
+    padding-left: 12px;
+    border-left-color: rgb(108, 1, 1);
+    border-right-color: rgb(108, 1, 1);
+    border-top-color: rgb(108, 1, 1);
+    border-bottom-color: rgb(75, 0, 0);
+    transition-duration: 0.3s;
+}
+
+.create_btn:hover {
+    background-color: rgb(192, 6, 6);
+}

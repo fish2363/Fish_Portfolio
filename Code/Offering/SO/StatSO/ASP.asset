@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 36556560271a4828ab57e90398ddf0cc, type: 3}
+  m_Name: ASP
+  m_EditorClassIdentifier: Assembly-CSharp::StatSO
+  statName: ASP
+  description: 
+  icon: {fileID: 0}
+  displayName: 
+  baseValue: 0
+  minValue: -0.02
+  maxValue: 0
+  <IsPercent>k__BackingField: 0
+  incrementStep: 1

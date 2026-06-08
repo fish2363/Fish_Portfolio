@@ -1,0 +1,115 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a834d864bed786d49bf543f67743a24a, type: 3}
+  m_Name: HatDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::HatDataSO
+  hats:
+  - id: 0
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 1
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 8640310354689177306, guid: 94605473d11574340b19ad2b07e3a92c, type: 3}
+    previewModel: {fileID: 8640310354689177306, guid: 94605473d11574340b19ad2b07e3a92c, type: 3}
+  - id: 2
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 3
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 8640310354689177306, guid: 94605473d11574340b19ad2b07e3a92c, type: 3}
+    previewModel: {fileID: 8640310354689177306, guid: 94605473d11574340b19ad2b07e3a92c, type: 3}
+  - id: 4
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 5
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 6
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 7
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 8
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 9
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 10
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 11
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 12
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 13
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 14
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 15
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 16
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 8640310354689177306, guid: 94605473d11574340b19ad2b07e3a92c, type: 3}
+    previewModel: {fileID: 8640310354689177306, guid: 94605473d11574340b19ad2b07e3a92c, type: 3}
+  - id: 17
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+  - id: 18
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 8640310354689177306, guid: 94605473d11574340b19ad2b07e3a92c, type: 3}
+    previewModel: {fileID: 8640310354689177306, guid: 94605473d11574340b19ad2b07e3a92c, type: 3}
+  - id: 19
+    displayName: TopHat
+    price: 0
+    hatPrefab: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}
+    previewModel: {fileID: 4027785053734783031, guid: 1cc17b8a410849c42b6515d98b3de9ad, type: 3}

@@ -1,0 +1,58 @@
+.pool_item {
+    flex-direction: row;
+    flex-basis: 45px;
+    justify-content: space-between;
+    align-items: center;
+    border-left-color: rgb(108, 108, 108);
+    border-right-color: rgb(108, 108, 108);
+    border-top-color: rgb(108, 108, 108);
+    border-bottom-color: rgb(108, 108, 108);
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    padding-right: 15px;
+    padding-left: 15px;
+    transition-duration: 0.3s;
+    margin-bottom: 5px;
+}
+
+.pool_item:hover {
+    border-left-color: rgb(144, 144, 144);
+    border-right-color: rgb(144, 144, 144);
+    border-top-color: rgb(144, 144, 144);
+    border-bottom-color: rgb(144, 144, 144);
+    background-color: rgb(113, 113, 113);
+}
+
+.pool_item.active {
+    border-left-color: rgb(255, 255, 255);
+    border-right-color: rgb(255, 255, 255);
+    border-top-color: rgb(255, 255, 255);
+    border-bottom-color: rgb(255, 255, 255);
+    background-color: rgb(144, 144, 144);
+}
+
+.delete_btn {
+    background-color: rgb(144, 0, 0);
+    border-left-color: rgb(111, 0, 0);
+    border-right-color: rgb(111, 0, 0);
+    border-top-color: rgb(111, 0, 0);
+    border-bottom-color: rgb(70, 0, 0);
+}
+
+.delete_btn:hover {
+    background-color: rgb(171, 0, 0);
+}
+
+.title_label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-basis: 50px;
+    flex-grow: 1;
+    padding-right: 10px;
+}

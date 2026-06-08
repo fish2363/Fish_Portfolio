@@ -1,0 +1,17 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
+    <Style src="project://database/Assets/GondrLib/ObjectPool/Editor/PoolManagerEditor.uss?fileID=7433441132597879392&amp;guid=52c0c0ddf3b32614c90aab5e21e3e008&amp;type=3#PoolManagerEditor" />
+    <ui:VisualElement name="Container" style="flex-grow: 1; flex-direction: column;">
+        <ui:VisualElement name="TopBar" class="top_bar">
+            <ui:Label text="PoolManager Editor" name="TitleLabel" style="font-size: 25px; -unity-font-style: bold; text-shadow: 2px 2px 5px rgba(43, 43, 43, 0.13);" />
+            <ui:Button text="Create" name="CreateBtn" class="create_btn" />
+        </ui:VisualElement>
+        <GondrLib.ObjectPool.Editor.GGMSplitView fixed-pane-initial-dimension="250">
+            <ui:VisualElement name="LeftPanel" style="flex-grow: 1; padding-top: 5px; padding-right: 5px; padding-bottom: 5px; padding-left: 5px;">
+                <ui:ScrollView name="ItemView" class="scroll_view" />
+            </ui:VisualElement>
+            <ui:VisualElement name="RightPanel" style="flex-grow: 1; padding-top: 5px; padding-right: 5px; padding-bottom: 5px; padding-left: 5px;">
+                <ui:VisualElement name="InspectorView" class="inspector_view" />
+            </ui:VisualElement>
+        </GondrLib.ObjectPool.Editor.GGMSplitView>
+    </ui:VisualElement>
+</ui:UXML>

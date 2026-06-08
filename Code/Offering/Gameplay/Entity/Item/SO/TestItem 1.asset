@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a705eae56d5f274cabb3f7e4143292f, type: 3}
+  m_Name: TestItem 1
+  m_EditorClassIdentifier: Assembly-CSharp::ItemSO
+  weaponName: Test
+  weaponDescription: "\uD14C\uC2A4\uD2B8 \uC785\uB2C8\uB2E4"
+  visualPrefab: {fileID: 7561992395897083403, guid: 23d647bcfdfb98c4e830147ed4d3dded, type: 3}
+  slotType: 0
+  equipPosition: {x: 0, y: 0, z: 0}
+  equipRotation: {x: 0, y: 0, z: 0}
+  equipScale: {x: 0.0091372, y: 0.0091372, z: 0.0091372}
+  dropScale: {x: 1, y: 1, z: 1}
+  effectDefinitions: []
+  references:
+    version: 2
+    RefIds: []
