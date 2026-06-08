@@ -14,7 +14,6 @@ public class UIManager : BaseManager<UIManager>
     private readonly Dictionary<Type, UIBase> _uiMap = new();
     private readonly Dictionary<Type, UniTask<UIBase>> _loadingTasks = new();
 
-    // Stack 대신 List — 중간 제거(Hide<T>) 지원
     private readonly List<UIBase> _popupStack = new();
     private readonly List<UIBase> _fixedStack = new();
 
@@ -41,7 +40,7 @@ public class UIManager : BaseManager<UIManager>
         if (inputSO != null)
             inputSO.OnPauseClickEvent -= TryCloseByEsc;
 
-        foreach (var ui in _uiMap.Values)
+        foreach (UIBase ui in _uiMap.Values)
         {
             if (ui != null)
                 Object.Destroy(ui.gameObject);
@@ -55,15 +54,7 @@ public class UIManager : BaseManager<UIManager>
 
     #endregion
 
-    #region Public API
-    public void NotifyHidden(UIBase ui)
-    {
-        RemoveFromStack(ui);
-    }
-    public bool IsOpened<T>() where T : UIBase
-    {
-        return _uiMap.TryGetValue(typeof(T), out UIBase ui) && ui.gameObject.activeSelf;
-    }
+    #region Show / Hide API
 
     public async UniTask<T> Show<T>(params object[] param) where T : UIBase
     {
@@ -71,28 +62,63 @@ public class UIManager : BaseManager<UIManager>
         if (ui == null) return null;
 
         T typedUI = ui as T;
-
-        if (!typedUI.CanOpen(param)) return null;
+        if (typedUI == null || !typedUI.CanOpen(param)) return null;
 
         PushToStack(typedUI);
         typedUI.Show(param);
         return typedUI;
     }
 
-    // 최상단 닫기
+    public void Hide<T>(params object[] param) where T : UIBase
+    {
+        if (!_uiMap.TryGetValue(typeof(T), out UIBase ui) || ui == null)
+            return;
+
+        ui.Hide(param);
+    }
+
+    public void HideImmediate<T>() where T : UIBase
+    {
+        if (!_uiMap.TryGetValue(typeof(T), out UIBase ui) || ui == null)
+            return;
+
+        RemoveFromStack(ui);
+        ui.HideImmediate();
+    }
+
     public void Hide(params object[] param)
     {
         if (TryCloseTop(_fixedStack, param)) return;
         TryCloseTop(_popupStack, param);
     }
 
-    
-
-    // isDestroyAtClosed UI가 Destroy될 때 호출
-    public void RemoveCache(Type type)
+    public void Destroy<T>() where T : UIBase
     {
+        Type type = typeof(T);
+        if (!_uiMap.TryGetValue(type, out UIBase ui) || ui == null)
+            return;
+
+        RemoveFromStack(ui);
         _uiMap.Remove(type);
+        Object.Destroy(ui.gameObject); 
     }
+
+    public bool IsOpened<T>() where T : UIBase
+        => _uiMap.TryGetValue(typeof(T), out UIBase ui) && ui != null && ui.gameObject.activeSelf;
+
+    public T Get<T>() where T : UIBase
+    {
+        _uiMap.TryGetValue(typeof(T), out UIBase ui);
+        return ui as T;
+    }
+
+    #endregion
+
+    #region Internal Callbacks (UIBase → UIManager)
+
+    public void NotifyHidden(UIBase ui) => RemoveFromStack(ui);
+
+    public void RemoveCache(Type type) => _uiMap.Remove(type);
 
     #endregion
 
@@ -103,10 +129,10 @@ public class UIManager : BaseManager<UIManager>
         if (_uiMap.TryGetValue(type, out UIBase existing) && existing != null)
             return existing;
 
-        if (_loadingTasks.TryGetValue(type, out var ongoing))
+        if (_loadingTasks.TryGetValue(type, out UniTask<UIBase> ongoing))
             return await ongoing;
 
-        var task = CreateAsync(type).Preserve();
+        UniTask<UIBase> task = CreateAsync(type).Preserve();
         _loadingTasks[type] = task;
 
         try { return await task; }
@@ -117,37 +143,29 @@ public class UIManager : BaseManager<UIManager>
     {
         string fileName = type.Name;
 
-        // 프리팹은 항상 GameObject로 로드
-        // 캐시 히트 시 즉시 반환, 아니면 Addressables 로드
+        // 캐시 히트 시 즉시, 아니면 Addressables 비동기 로드
         GameObject prefab = ResourceManager.Instance.Get<GameObject>(fileName);
         if (prefab == null)
             prefab = await ResourceManager.Instance.LoadAsync<GameObject>(fileName);
 
         if (prefab == null)
         {
-            Debug.LogError($"[UIManager] 프리팹 로드 실패: '{fileName}'");
+            Debug.LogError($"프리팹 로드 실패:{fileName}");
             return null;
         }
 
         UIBase prefabUI = prefab.GetComponent<UIBase>();
         if (prefabUI == null)
         {
-            Debug.LogError($"[UIManager] UIBase 없음: '{fileName}'");
+            Debug.LogError($"프리팹에 UIBase 없음:{fileName}");
             return null;
         }
 
-        Transform parent = uiParents[(int)prefabUI.uiLayer];
-        GameObject go = Object.Instantiate(prefab, parent);
+        int layerIndex = (int)prefabUI.uiLayer;
+        GameObject go = Object.Instantiate(prefab, uiParents[layerIndex]);
         go.name = fileName;
 
         UIBase ui = go.GetComponent<UIBase>();
-        if (ui == null)
-        {
-            Debug.LogError($"[UIManager] 인스턴스에 UIBase 없음: '{fileName}'");
-            Object.Destroy(go);
-            return null;
-        }
-
         _uiMap[type] = ui;
         return ui;
     }
@@ -161,8 +179,7 @@ public class UIManager : BaseManager<UIManager>
         List<UIBase> stack = GetStack(ui.uiLayer);
         if (stack == null) return;
 
-        // 이미 스택에 있으면 중복 push 방지
-        if (!stack.Contains(ui))
+        if (!stack.Contains(ui)) // 중복 push 방지
             stack.Add(ui);
 
         ui.transform.SetAsLastSibling();
@@ -172,18 +189,6 @@ public class UIManager : BaseManager<UIManager>
     {
         _popupStack.Remove(ui);
         _fixedStack.Remove(ui);
-    }
-
-    private void TryCloseByEsc()
-    {
-        UIBase top = null;
-
-        if (_fixedStack.Count > 0) top = _fixedStack[^1];
-        else if (_popupStack.Count > 0) top = _popupStack[^1];
-
-        if (top == null || !top.canCloseByEsc) return;
-
-        top.Hide();
     }
 
     private bool TryCloseTop(List<UIBase> stack, object[] param)
@@ -196,21 +201,15 @@ public class UIManager : BaseManager<UIManager>
         return true;
     }
 
-    public T Get<T>() where T : UIBase
+    private void TryCloseByEsc()
     {
-        _uiMap.TryGetValue(typeof(T), out UIBase ui);
-        return ui as T;
-    }
+        UIBase top = null;
+        if (_fixedStack.Count > 0) top = _fixedStack[^1];
+        else if (_popupStack.Count > 0) top = _popupStack[^1];
 
-    public void Hide<T>(params object[] param) where T : UIBase
-    {
-        if (!_uiMap.TryGetValue(typeof(T), out UIBase ui)) return;
-        ui.Hide(param);  // RemoveFromStack은 NotifyHidden이 처리
-    }
+        if (top == null || !top.canCloseByEsc) return;
 
-    public void CloseUI(UIBase ui)
-    {
-        ui.Hide();  // 마찬가지
+        top.Hide();
     }
 
     private List<UIBase> GetStack(EUILayer layer) => layer switch
