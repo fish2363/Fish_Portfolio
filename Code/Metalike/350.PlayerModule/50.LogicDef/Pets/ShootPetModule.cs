@@ -24,6 +24,9 @@ public class ShootPetDef : PetModuleDef
     [Header("공격")]
     public float attackCooldown = 1.5f;
     public float bulletSpeed = 20f;
+    public bool rotateToTargetOnAttack = true;
+    public bool requireLineOfSight = true;
+    public LayerMask lineOfSightBlockers;
 
     [Header("총구 위치")]
     public Vector3 muzzleOffset = new Vector3(0f, 0f, 0.5f);
@@ -38,6 +41,7 @@ public class ShootPetModule : PetModule<ShootPetDef>
 {
     private float _cooldownTimer;
     private readonly Collider[] _overlapBuffer = new Collider[16];
+    private int _fallbackLineOfSightBlockers;
 
     public override bool IsIndependent => true;
 
@@ -49,6 +53,14 @@ public class ShootPetModule : PetModule<ShootPetDef>
     {
         base.OnEquip(owner);
         _cooldownTimer = _def.attackCooldown;
+        _fallbackLineOfSightBlockers = LayerMask.GetMask(
+            "Default",
+            "Ground",
+            "Door",
+            "Wreck",
+            "Room",
+            "Shutter"
+        );
     }
 
     public override void ModuleUpdate(float deltaTime)
@@ -73,7 +85,12 @@ public class ShootPetModule : PetModule<ShootPetDef>
             return false;
 
         Vector3 muzzlePos = GetMuzzleWorldPosition();
-        Vector3 direction = target.transform.position - muzzlePos;
+        Vector3 targetPos = GetTargetAimPosition(target);
+
+        if (!HasLineOfSight(muzzlePos, targetPos))
+            return false;
+
+        Vector3 direction = targetPos - muzzlePos;
 
         if (direction.sqrMagnitude <= 0.0001f)
             return false;
@@ -83,7 +100,7 @@ public class ShootPetModule : PetModule<ShootPetDef>
         Vector3 lookDir = direction;
         lookDir.y = 0f;
 
-        if (lookDir.sqrMagnitude > 0.0001f)
+        if (_def.rotateToTargetOnAttack && lookDir.sqrMagnitude > 0.0001f)
             _petTrm.rotation = Quaternion.LookRotation(lookDir.normalized, Vector3.up);
 
         FireBullet(muzzlePos, direction);
@@ -159,10 +176,14 @@ public class ShootPetModule : PetModule<ShootPetDef>
     {
         Entity best = null;
         float bestDist = float.MaxValue;
+        Vector3 muzzlePos = GetMuzzleWorldPosition();
 
         for (int i = 0; i < count; i++)
         {
             if (!TryGetTargetEntity(_overlapBuffer[i], out Entity entity))
+                continue;
+
+            if (!HasLineOfSight(muzzlePos, GetTargetAimPosition(entity)))
                 continue;
 
             float dist = (_petTrm.position - entity.transform.position).sqrMagnitude;
@@ -180,10 +201,14 @@ public class ShootPetModule : PetModule<ShootPetDef>
     {
         Entity best = null;
         float bestHp = float.MaxValue;
+        Vector3 muzzlePos = GetMuzzleWorldPosition();
 
         for (int i = 0; i < count; i++)
         {
             if (!TryGetTargetEntity(_overlapBuffer[i], out Entity entity))
+                continue;
+
+            if (!HasLineOfSight(muzzlePos, GetTargetAimPosition(entity)))
                 continue;
 
             EntityHealth hp = entity.GetCompo<EntityHealth>();
@@ -204,10 +229,14 @@ public class ShootPetModule : PetModule<ShootPetDef>
     {
         Entity selected = null;
         int validCount = 0;
+        Vector3 muzzlePos = GetMuzzleWorldPosition();
 
         for (int i = 0; i < count; i++)
         {
             if (!TryGetTargetEntity(_overlapBuffer[i], out Entity entity))
+                continue;
+
+            if (!HasLineOfSight(muzzlePos, GetTargetAimPosition(entity)))
                 continue;
 
             validCount++;
@@ -217,6 +246,26 @@ public class ShootPetModule : PetModule<ShootPetDef>
         }
 
         return selected;
+    }
+
+    private bool HasLineOfSight(Vector3 origin, Vector3 targetPos)
+    {
+        if (!_def.requireLineOfSight)
+            return true;
+
+        int blockerMask = _def.lineOfSightBlockers.value != 0
+            ? _def.lineOfSightBlockers.value
+            : _fallbackLineOfSightBlockers;
+
+        if (blockerMask == 0)
+            return true;
+
+        return !Physics.Linecast(origin, targetPos, blockerMask, QueryTriggerInteraction.Ignore);
+    }
+
+    private static Vector3 GetTargetAimPosition(Entity target)
+    {
+        return target.transform.position + Vector3.up * 0.5f;
     }
 
     private static bool TryGetTargetEntity(Collider collider, out Entity entity)

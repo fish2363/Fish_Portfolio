@@ -2,7 +2,7 @@ public struct EffectContext
 {
     public Entity Owner;
     public Entity Target;
-    public bool IsCritical;
+    public DamageData DamageData;
     public float Damage;
     public float DeltaTime;
 
@@ -15,19 +15,18 @@ public struct EffectContext
         Owner = owner
     };
 
-    public static EffectContext OnHit(Entity owner, Entity target, bool crit) => new()
+    public static EffectContext OnHit(Entity owner, Entity target, DamageData data) => new()
     {
         Owner = owner,
         Target = target,
-        IsCritical = crit
+        DamageData = data
     };
 
-    public static EffectContext OnPlayerHit(Entity owner, Entity dealer, bool crit, float dmg) => new()
+    public static EffectContext OnPlayerHit(Entity owner, Entity dealer, DamageData data) => new()
     {
         Owner = owner,
         Target = dealer,
-        IsCritical = crit,
-        Damage = dmg
+        DamageData = data
     };
 
     public static EffectContext OnTimerTick(Entity owner, float dt) => new()
@@ -40,6 +39,9 @@ public struct EffectContext
     {
         Owner = owner
     };
+
+    public static EffectContext OnFistsAttack() => new();
+
 
     public static EffectContext OnProjectileHit(
         Projectile projectile,

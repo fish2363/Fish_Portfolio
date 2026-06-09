@@ -13,6 +13,7 @@ public abstract class PetModuleDef : IModuleLogicDef
     public float followMoveSpeed = 4.2f;
     public float catchUpMultiplier = 1.8f;
     public float rotateSpeed = 10f;
+    public bool rotateToMoveDirection = true;
     public float defaultHeight = 10f;
 
     [Header("Base: 텔레포트 안전장치")]
@@ -60,6 +61,7 @@ public abstract class PetModule<T> : IModuleLogic, IPetModule, IUpdateModuleLogi
         _moduleController = owner.GetCompo<ModuleController>();
         _entityStatCompo = owner.GetCompo<EntityStatCompo>();
 
+        _petCompo?.Register(this);
         SpawnPet();
     }
 
@@ -76,6 +78,7 @@ public abstract class PetModule<T> : IModuleLogic, IPetModule, IUpdateModuleLogi
         KillTweens();
         DestroyPet();
 
+        _petCompo?.Unregister(this);
         _owner = null;
         _ownerTrm = null;
         _petCompo = null;
@@ -87,8 +90,7 @@ public abstract class PetModule<T> : IModuleLogic, IPetModule, IUpdateModuleLogi
 
     protected void FollowSlot(float deltaTime)
     {
-        Vector3 slotPos = _petCompo.GetSlotWorldPosition(this);
-        Vector3 targetPos = new Vector3(slotPos.x, slotPos.y + _def.defaultHeight, slotPos.z);
+        Vector3 targetPos = GetSlotTargetPosition();
         Vector3 currentPos = _petTrm.position;
 
         Vector3 toTarget = targetPos - currentPos;
@@ -131,6 +133,9 @@ public abstract class PetModule<T> : IModuleLogic, IPetModule, IUpdateModuleLogi
             followSpeed * deltaTime
         );
 
+        if (!_def.rotateToMoveDirection)
+            return;
+
         if (toTarget.sqrMagnitude > 0.0001f)
         {
             _petTrm.rotation = Quaternion.Slerp(
@@ -153,6 +158,20 @@ public abstract class PetModule<T> : IModuleLogic, IPetModule, IUpdateModuleLogi
                 );
             }
         }
+    }
+
+    protected Vector3 GetSlotTargetPosition()
+    {
+        Vector3 slotPos = _petCompo.GetSlotWorldPosition(this);
+        return new Vector3(slotPos.x, slotPos.y + _def.defaultHeight, slotPos.z);
+    }
+
+    protected bool IsNearSlot(float distance)
+    {
+        if (_petCompo == null || _petTrm == null)
+            return false;
+
+        return Vector3.Distance(_petTrm.position, GetSlotTargetPosition()) <= distance;
     }
 
     protected void SpawnPet()

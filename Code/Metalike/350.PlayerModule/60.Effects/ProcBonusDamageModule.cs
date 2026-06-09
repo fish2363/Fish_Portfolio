@@ -91,7 +91,7 @@ public class ProcBonusDamageModule : IExecutableEffect
         //if (enemy is Enemy noBoss) noBoss.EnemyStunned(_def.stunDuration);
     }
 
-    public void OnEquip(Entity owner)
+    public void OnInitialize(Entity owner)
     {
         _owner = owner;
         _moduleController = owner.GetCompo<ModuleController>();

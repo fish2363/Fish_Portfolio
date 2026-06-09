@@ -12,7 +12,7 @@ public enum StatBoostDurationMode
 [ModuleDisplayName("스탯 증가", "트리거 발동 시 특정 스탯을 비율로 증가시킵니다.")]
 public class StatBoostEffectDef : IModuleEffectDef
 {
-    [Range(0f, 1f)]
+    [Range(-1f, 1f)]
     public float upgradePercent = 0.2f;
 
     public StatSO statSO;
@@ -54,7 +54,7 @@ public class StatBoostEffect : IExecutableEffect, IUpdateModuleLogic
         _def = def;
     }
 
-    public void OnEquip(Entity owner)
+    public void OnInitialize(Entity owner)
     {
         _statCompo = owner.GetCompo<EntityStatCompo>();
     }

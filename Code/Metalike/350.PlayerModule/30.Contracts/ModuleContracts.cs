@@ -13,7 +13,7 @@ public interface IModuleLogicDef
 
 public interface IModuleEffect
 {
-    void OnEquip(Entity owner);
+    void OnInitialize(Entity owner);
     void OnUnequip();
 }
 

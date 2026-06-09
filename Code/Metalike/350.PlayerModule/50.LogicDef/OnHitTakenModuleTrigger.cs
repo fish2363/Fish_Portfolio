@@ -35,8 +35,7 @@ public class OnHitTakenModuleTrigger :
             EffectContext.OnPlayerHit(
                 _owner,
                 dealer,
-                data.isCritical,
-                data.damage
+                data
             )
         );
     }

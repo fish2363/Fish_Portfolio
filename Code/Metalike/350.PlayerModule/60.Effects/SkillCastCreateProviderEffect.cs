@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using GondrLib.ObjectPool.RunTime;
 
+[ModuleDisplayName("½Ã³ÊÁö ¿ÀºêÁ§Æ® »ý¼º", "½Ã³ÊÁö¸¦ ÀÏÀ¸Å°´Â »ý¼º È¿°ú¸¦ ÁÝ´Ï´Ù.")]
 [Serializable]
 public class SkillCastCreateProviderEffectDef : IModuleEffectDef
 {
-    [Header("ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½")]
-    public int spawnCount = 3;             // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ bombCount)
-    public float spawnRadius = 2f;         // ï¿½ï¿½Ñ¸ï¿½ ï¿½Ý°ï¿½
-    public PoolItemSO providerItemPrefab;  // ï¿½ï¿½Åº/ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ bombModelPrefab)
+    [Header("»ý¼º ¼³Á¤")]
+    public int spawnCount = 3;             // »ý¼º °³¼ö (±âÁ¸ bombCount)
+    public float spawnRadius = 2f;         // Èð»Ñ¸± ¹Ý°æ
+    public PoolItemSO providerItemPrefab;  // ÆøÅº/ÀåÆÇ ÇÁ¸®ÆÕ (±âÁ¸ bombModelPrefab)
     public StatSO damageStat;
     public AttackDataSO attackData;
 
@@ -30,7 +31,7 @@ public class SkillCastCreateProviderEffect : IExecutableEffect, ISynergyProvider
 
     public SkillCastCreateProviderEffect(SkillCastCreateProviderEffectDef def) => _def = def;
 
-    public void OnEquip(Entity owner)
+    public void OnInitialize(Entity owner)
     {
         _owner = owner;
         _controller = owner.GetCompo<ModuleController>();
@@ -47,11 +48,7 @@ public class SkillCastCreateProviderEffect : IExecutableEffect, ISynergyProvider
 
     public void Execute(EffectContext ctx)
     {
-        if (_owner == null || _controller == null || _statCompo == null)
-        return;
-
-    if (_def.providerItemPrefab == null || _def.attackData == null || _def.damageStat == null)
-        return;
+        if (_def.providerItemPrefab == null) return;
 
         Vector3 centerPos = _owner.transform.position;
         var damageData = _controller.DamageCompo.CalculateDamage(_statCompo.GetStat(_def.damageStat), _def.attackData);

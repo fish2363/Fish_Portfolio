@@ -1,5 +1,7 @@
+using Core.EventBus;
 using GondrLib.Dependencies;
 using GondrLib.ObjectPool.RunTime;
+using Public.Core.Events;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -21,14 +23,37 @@ public class ModuleController : MonoBehaviour, IEntityComponent
     public LayerMask WhatIsTarget;
 
     private PetComponent _petComponent;
+    private SkillComponent _skillComponent;
 
     public void Initialize(Entity entity)
     {
         _owner = entity;
         DamageCompo = entity.GetCompo<DamageCompo>();
         _petComponent = entity.GetCompo<PetComponent>();
-    }
+        _skillComponent = entity.GetCompo<SkillComponent>();
 
+        Bus<ModuleEquipChangedEvent>.OnEvent += HandleModuleEquipChanged;
+        Bus<WeaponAttackTriggeredEvent>.OnEvent += OnFistsAttack;
+        Bus<HitDealtEvent>.OnEvent += OnHit;
+        _skillComponent.OnSkillEvent += OnSkillCast;
+    }
+    private void OnDestroy()
+    {
+        Bus<HitDealtEvent>.OnEvent -= OnHit;
+        _skillComponent.OnSkillEvent -= OnSkillCast;
+        Bus<WeaponAttackTriggeredEvent>.OnEvent -= OnFistsAttack;
+        Bus<ModuleEquipChangedEvent>.OnEvent -= HandleModuleEquipChanged;
+    }
+    private void HandleModuleEquipChanged(ModuleEquipChangedEvent evt)
+    {
+        UnequipAllModules();
+
+        if (evt.equippedModules == null)
+            return;
+
+        for (int i = 0; i < evt.equippedModules.Count; i++)
+            EquipModule(evt.equippedModules[i]);
+    }
     public void EquipModule(ModuleSO module)
     {
         if (module == null)
@@ -190,11 +215,25 @@ public class ModuleController : MonoBehaviour, IEntityComponent
         });
     }
 
-    public void OnHit(Entity target, DamageData data)
+    public void OnHit(HitDealtEvent evt)
     {
+        Entity target = evt.target;
+        DamageData data = evt.data;
+
+        if (evt.owner != _owner)
+            return;
+
         ForEachFeature<IHitModifier>(modifier =>
         {
             modifier.OnHit(target, data);
+        });
+    }
+
+    public void OnFistsAttack(WeaponAttackTriggeredEvent evt)
+    {
+        ForEachFeature<IFistsAttackModifier>(modifier =>
+        {
+            modifier.OnFistsAttack();
         });
     }
 

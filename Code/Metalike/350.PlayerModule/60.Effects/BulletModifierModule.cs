@@ -2,6 +2,7 @@ using Core.EventBus;
 using System;
 
 [Serializable]
+[ModuleDisplayName("총알 모디파이어", "총알에 특수한 효과 부여")]
 public class BulletModifierEffectDef : IModuleEffectDef
 {
     public string modifierEventName;
@@ -21,7 +22,7 @@ public class BulletModifierEffect : IModuleEffect
         _def = def;
     }
 
-    public void OnEquip(Entity owner)
+    public void OnInitialize(Entity owner)
     {
         if (string.IsNullOrWhiteSpace(_def.modifierEventName))
             return;

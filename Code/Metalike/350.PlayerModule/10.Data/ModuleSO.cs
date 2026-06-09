@@ -8,6 +8,9 @@ public class ModuleSO : ScriptableObject
 
     [TextArea]
     public string description;
+    [Header("스탯 변화량(예: 공격력 10%)")]
+    public string effectStack;
+    public string smallJoke;
 
     public Sprite icon;
 

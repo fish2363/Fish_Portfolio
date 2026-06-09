@@ -2,6 +2,7 @@ using GondrLib.ObjectPool.RunTime;
 using System;
 using UnityEngine;
 
+[ModuleDisplayName("시너지 탄막 뿌리기", "시너지에 따라 변화하는 탄막을 흩뿌립니다.")]
 [Serializable]
 public class SkillCastWaveSynergyEffectDef : IModuleEffectDef
 {
@@ -55,7 +56,7 @@ public class SkillCastWaveSynergyEffect :
         _def = def;
     }
 
-    public void OnEquip(Entity owner)
+    public void OnInitialize(Entity owner)
     {
         _owner = owner;
         _controller = owner.GetCompo<ModuleController>();

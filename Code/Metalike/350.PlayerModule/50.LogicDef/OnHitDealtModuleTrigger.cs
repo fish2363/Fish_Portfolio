@@ -17,7 +17,7 @@ public class OnHitDealtModuleTriggerDef : ModuleTriggerDef
     }
 }
 
-public class OnHitDealtModuleTrigger : ModuleTriggerBase<OnHitDealtModuleTriggerDef>
+public class OnHitDealtModuleTrigger : ModuleTriggerBase<OnHitDealtModuleTriggerDef>, IHitModifier
 {
     public OnHitDealtModuleTrigger(OnHitDealtModuleTriggerDef def) : base(def)
     {
@@ -26,29 +26,24 @@ public class OnHitDealtModuleTrigger : ModuleTriggerBase<OnHitDealtModuleTrigger
     public override void OnEquip(Entity owner)
     {
         base.OnEquip(owner);
-        Bus<HitDealtEvent>.OnEvent += HandleSuccess;
     }
 
-    public override void OnUnequip()
+    public void OnHit(Entity target, DamageData data)
     {
-        Bus<HitDealtEvent>.OnEvent -= HandleSuccess;
-        base.OnUnequip();
-    }
-
-    private void HandleSuccess(HitDealtEvent evt)
-    {
-        if (evt.owner != _owner)
-            return;
-
-        if (_def.onlyOnCritical && !evt.isCritical)
+        if (_def.onlyOnCritical && !data.isCritical)
             return;
 
         if (UnityEngine.Random.value > _def.chance)
             return;
 
-        if (evt.target == null || evt.target.IsDead)
+        if (target == null || target.IsDead)
             return;
 
-        ExecuteAll(EffectContext.OnHit(_owner, evt.target, evt.isCritical));
+        ExecuteAll(EffectContext.OnHit(_owner, target, data));
+    }
+
+    public override void OnUnequip()
+    {
+        base.OnUnequip();
     }
 }
