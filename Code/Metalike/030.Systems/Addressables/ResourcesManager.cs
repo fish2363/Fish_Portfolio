@@ -10,10 +10,11 @@ using Object = UnityEngine.Object;
 
 public class ResourceManager : BaseManager<ResourceManager>
 {
-    private readonly Dictionary<string, string> _addressMap = new();
+    private readonly Dictionary<string, string> _addressMap = new();        
+    private readonly Dictionary<string, Object> _cachedResources = new();   
+    private readonly Dictionary<string, AsyncOperationHandle> _handles = new();      
+    private readonly Dictionary<string, AsyncOperationHandle> _labelHandles = new(); 
     private readonly Dictionary<string, List<string>> _labelToKeys = new();
-    private readonly Dictionary<string, Object> _cachedResources = new();
-    private readonly Dictionary<string, AsyncOperationHandle> _handles = new();
 
     public const string InGame = "InGame";
     public const string Stage = "Stage";
@@ -26,7 +27,6 @@ public class ResourceManager : BaseManager<ResourceManager>
     {
         await Addressables.InitializeAsync().ToUniTask();
         BuildAddressMap();
-        await LoadLabelAsync<Object>(InGame);
         IsLoaded = true;
     }
 
@@ -37,10 +37,15 @@ public class ResourceManager : BaseManager<ResourceManager>
         foreach (var handle in _handles.Values)
             if (handle.IsValid()) Addressables.Release(handle);
 
+        foreach (var handle in _labelHandles.Values)
+            if (handle.IsValid()) Addressables.Release(handle);
+
         _handles.Clear();
+        _labelHandles.Clear();
         _cachedResources.Clear();
         _labelToKeys.Clear();
         _addressMap.Clear();
+        IsLoaded = false;
     }
 
     private void BuildAddressMap()
@@ -52,9 +57,7 @@ public class ResourceManager : BaseManager<ResourceManager>
             foreach (var key in locator.Keys)
             {
                 if (key is not string address) continue;
-
-                // GUID, 라벨 등 경로가 아닌 키 필터링
-                if (!address.Contains('/')) continue;
+                if (!address.Contains('/')) continue;  
 
                 string fileName = Path.GetFileNameWithoutExtension(address);
                 if (string.IsNullOrEmpty(fileName)) continue;
@@ -62,10 +65,7 @@ public class ResourceManager : BaseManager<ResourceManager>
                 if (_addressMap.TryGetValue(fileName, out string existing))
                 {
                     Debug.LogWarning(
-                        $"[ResourceManager] 파일명 충돌: '{fileName}'\n" +
-                        $"  등록됨: {existing}\n" +
-                        $"  무시됨: {address}\n" +
-                        $"  → 파일명을 고유하게 변경하세요.");
+                        $"파일명 충돌:{fileName}\n등록됨: {existing}\n  무시됨: {address}\n  파일명을 고유하게 변경하세요");
                     continue;
                 }
 
@@ -73,25 +73,25 @@ public class ResourceManager : BaseManager<ResourceManager>
             }
         }
 
-        Debug.Log($"[ResourceManager] 주소 맵 빌드 완료: {_addressMap.Count}개");
+        Debug.Log($"주소 맵 빌드 완료: {_addressMap.Count}개");
     }
 
     #endregion
 
-    #region Get & Load
+    #region Get & Load (단일)
 
     public T Get<T>(string fileName) where T : Object
     {
         if (!_addressMap.TryGetValue(fileName, out string address))
         {
-            Debug.LogError($"[ResourceManager] 주소 없음: '{fileName}'");
+            Debug.LogError($"주소 없음: '{fileName}'");
             return null;
         }
 
         if (_cachedResources.TryGetValue(address, out Object resource))
             return resource as T;
 
-        Debug.LogWarning($"[ResourceManager] 캐시 미스: '{fileName}'. LoadAsync 먼저 호출하세요.");
+        Debug.LogWarning($"캐시 미스:{fileName} LoadAsync 먼저 호출하세요.");
         return null;
     }
 
@@ -99,7 +99,7 @@ public class ResourceManager : BaseManager<ResourceManager>
     {
         if (!_addressMap.TryGetValue(fileName, out string address))
         {
-            Debug.LogError($"[ResourceManager] 주소 없음: '{fileName}'");
+            Debug.LogError($"주소 없음: {fileName}");
             return null;
         }
 
@@ -112,7 +112,7 @@ public class ResourceManager : BaseManager<ResourceManager>
         if (handle.Status != AsyncOperationStatus.Succeeded)
         {
             Addressables.Release(handle);
-            Debug.LogError($"[ResourceManager] 로드 실패: '{fileName}'");
+            Debug.LogError($"로드 실패:{fileName}");
             return null;
         }
 
@@ -121,84 +121,73 @@ public class ResourceManager : BaseManager<ResourceManager>
         return handle.Result;
     }
 
-    public async UniTask LoadLabelAsync<T>(string label, Action<string, int, int> onProgress = null)
+    public void Release(string fileName)
+    {
+        if (!_addressMap.TryGetValue(fileName, out string address)) return;
+        if (!_handles.TryGetValue(address, out var handle)) return;
+
+        if (handle.IsValid()) Addressables.Release(handle);
+        _handles.Remove(address);
+        _cachedResources.Remove(address);
+    }
+
+    #endregion
+
+    #region Load (라벨 배치)
+
+    public async UniTask LoadLabelAsync<T>(string label, IProgress<float> onProgress = null)
         where T : Object
     {
+        if (_labelToKeys.ContainsKey(label)) return; 
+
         var locations = await Addressables
             .LoadResourceLocationsAsync(label, typeof(T))
             .ToUniTask();
 
         if (locations == null || locations.Count == 0)
         {
-            Debug.LogWarning($"[ResourceManager] '{label}' 라벨에 에셋 없음.");
+            Debug.LogWarning($"{label} 라벨에 에셋 없음.");
             return;
         }
 
-        if (!_labelToKeys.ContainsKey(label))
-            _labelToKeys[label] = new List<string>();
+        var handle = Addressables.LoadAssetsAsync<T>(locations, null);
+        await handle.ToUniTask(onProgress);
 
-        int total = locations.Count;
-        int completed = 0;
-        var tasks = new List<UniTask>();
-
-        foreach (var location in locations)
-        {
-            string address = location.PrimaryKey;
-
-            if (_cachedResources.ContainsKey(address))
-            {
-                completed++;
-                onProgress?.Invoke(address, completed, total);
-                continue;
-            }
-
-            tasks.Add(LoadSingleAsync<T>(address, label, () =>
-            {
-                completed++;
-                onProgress?.Invoke(address, completed, total);
-            }));
-        }
-
-        await UniTask.WhenAll(tasks);
-    }
-
-    private async UniTask LoadSingleAsync<T>(string address, string label, Action onComplete)
-        where T : Object
-    {
-        var handle = Addressables.LoadAssetAsync<T>(address);
-        await handle.ToUniTask();
-
-        if (handle.Status == AsyncOperationStatus.Succeeded)
-        {
-            _cachedResources[address] = handle.Result;
-            _handles[address] = handle;
-            _labelToKeys[label].Add(address);
-        }
-        else
+        if (handle.Status != AsyncOperationStatus.Succeeded)
         {
             Addressables.Release(handle);
-            Debug.LogError($"[ResourceManager] 단일 로드 실패: '{address}'");
+            Debug.LogError($"{label} 라벨 로드 실패.");
+            return;
         }
 
-        onComplete?.Invoke();
+        var keys = new List<string>(locations.Count);
+        for (int i = 0; i < locations.Count; i++)
+        {
+            string address = locations[i].PrimaryKey;
+            _cachedResources[address] = handle.Result[i];
+            keys.Add(address);
+        }
+
+        _labelHandles[label] = handle;  
+        _labelToKeys[label] = keys;
     }
 
     public void ReleaseLabel(string label)
     {
-        if (!_labelToKeys.TryGetValue(label, out var keys)) return;
-
-        foreach (var key in keys)
+        if (_labelToKeys.TryGetValue(label, out var keys))
         {
-            _cachedResources.Remove(key);
-
-            if (_handles.TryGetValue(key, out var handle) && handle.IsValid())
-                Addressables.Release(handle);
-
-            _handles.Remove(key);
+            foreach (var key in keys)
+                _cachedResources.Remove(key);
+            _labelToKeys.Remove(label);
         }
 
-        _labelToKeys.Remove(label);
-        Debug.Log($"[ResourceManager] '{label}' 해제 완료.");
+        if (_labelHandles.TryGetValue(label, out var handle))
+        {
+            if (handle.IsValid()) Addressables.Release(handle);
+            _labelHandles.Remove(label);
+        }
+
+        Debug.Log($"{label} 해제 완료.");
     }
 
     #endregion
@@ -218,6 +207,26 @@ public class ResourceManager : BaseManager<ResourceManager>
     public GameObject Instantiate(string fileName, Vector3 position)
     {
         GameObject prefab = Get<GameObject>(fileName);
+        if (prefab == null) return null;
+
+        GameObject go = Object.Instantiate(prefab, position, Quaternion.identity);
+        go.name = prefab.name;
+        return go;
+    }
+
+    public async UniTask<GameObject> InstantiateAsync(string fileName, Transform parent = null)
+    {
+        GameObject prefab = await LoadAsync<GameObject>(fileName);
+        if (prefab == null) return null;
+
+        GameObject go = Object.Instantiate(prefab, parent);
+        go.name = prefab.name;
+        return go;
+    }
+
+    public async UniTask<GameObject> InstantiateAsync(string fileName, Vector3 position)
+    {
+        GameObject prefab = await LoadAsync<GameObject>(fileName);
         if (prefab == null) return null;
 
         GameObject go = Object.Instantiate(prefab, position, Quaternion.identity);

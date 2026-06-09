@@ -114,7 +114,7 @@ public class UIManager : BaseManager<UIManager>
 
     #endregion
 
-    #region Internal Callbacks (UIBase → UIManager)
+    #region Internal Callbacks (UIBase)
 
     public void NotifyHidden(UIBase ui) => RemoveFromStack(ui);
 
@@ -143,7 +143,6 @@ public class UIManager : BaseManager<UIManager>
     {
         string fileName = type.Name;
 
-        // 캐시 히트 시 즉시, 아니면 Addressables 비동기 로드
         GameObject prefab = ResourceManager.Instance.Get<GameObject>(fileName);
         if (prefab == null)
             prefab = await ResourceManager.Instance.LoadAsync<GameObject>(fileName);
